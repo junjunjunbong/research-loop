@@ -8,7 +8,7 @@
 
 ![Research Loop workflow: a research goal passes through explicit approval and a baseline into isolated experiments, deterministic evaluation, and an append-only research ledger](docs/assets/research-loop-hero.png)
 
-Research Loop combines a **Codex-first Agent Skill** with a **deterministic Python runner**. The skill understands the research intent, inspects the target repository, and proposes focused hypotheses. The runner enforces the parts that should not depend on agent judgment: approval integrity, Git isolation, command execution, metric extraction, result classification, and durable records.
+Research Loop combines a **portable Agent Skill for Codex and Claude Code** with a **deterministic Python runner**. The skill understands the research intent, inspects the target repository, and proposes focused hypotheses. The runner enforces the parts that should not depend on agent judgment: approval integrity, Git isolation, command execution, metric extraction, result classification, and durable records.
 
 You provide the goal. Research Loop derives the project-specific execution and evaluation contracts from repository evidence, shows the complete dry-run plan for approval, establishes a baseline, and runs each hypothesis in its own Git worktree.
 
@@ -28,6 +28,8 @@ Autonomous experimentation becomes difficult to trust when the agent can silentl
 | Evaluation conditions drift | Validate explicit compatibility fields such as dataset version or query count |
 | Long campaigns become hard to resume | Maintain an append-only ledger, checkpoint, and handoff document |
 | The loop runs indefinitely | Enforce experiment-count and wall-clock budgets |
+
+The same Agent Skill is packaged for both Codex and Claude Code; both clients delegate deterministic and safety-critical state transitions to the shared Python runner.
 
 Research Loop is useful when you have:
 
@@ -73,11 +75,33 @@ uv sync --extra dev
 uv run research-loop --help
 ```
 
-The plugin manifest is at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json), and the Agent Skill entrypoint is [`skills/research-loop/SKILL.md`](skills/research-loop/SKILL.md).
+The Codex manifest is at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json). The Claude Code [plugin manifest](.claude-plugin/plugin.json) and [self-hosted marketplace](.claude-plugin/marketplace.json) are under `.claude-plugin/`. Both clients use the same Agent Skill entrypoint at [`skills/research-loop/SKILL.md`](skills/research-loop/SKILL.md) and the same Python runner.
 
-### 2. Start from Codex
+#### Claude Code plugin install
 
-Open an existing Git research project and ask Codex for a bounded research campaign. For example:
+For local plugin development from this checkout:
+
+```bash
+claude plugin marketplace add ./ --scope project
+claude plugin install research-loop@research-loop --scope project
+```
+
+After the Claude Code manifests are available on GitHub, install from the repository-hosted marketplace:
+
+```bash
+claude plugin marketplace add junjunjunbong/research-loop
+claude plugin install research-loop@research-loop --scope project
+```
+
+The Claude Code skill is exposed as:
+
+```text
+/research-loop:research-loop
+```
+
+### 2. Start from Codex or Claude Code
+
+Open an existing Git research project and ask either client for a bounded research campaign. In Claude Code, invoke `/research-loop:research-loop`; in Codex, request the workflow directly. For example:
 
 ```text
 Set up and run a bounded autonomous research campaign for this repository.

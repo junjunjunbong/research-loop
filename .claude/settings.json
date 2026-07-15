@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "research-loop@research-loop": true
+  },
+  "extraKnownMarketplaces": {
+    "research-loop": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  }
+}
