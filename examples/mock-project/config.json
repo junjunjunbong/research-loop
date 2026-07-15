@@ -1,0 +1,7 @@
+{
+  "boost": 0.0,
+  "dataset_version": "mock-v1",
+  "query_count": 100,
+  "evaluation_config": "mock-eval-v1"
+}
+
