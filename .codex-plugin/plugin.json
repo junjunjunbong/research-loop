@@ -1,0 +1,33 @@
+{
+  "name": "research-loop",
+  "version": "0.1.0",
+  "description": "Turn an existing Git research project and a user goal into an approved, auditable experiment loop.",
+  "author": {
+    "name": "Research Loop contributors"
+  },
+  "repository": "",
+  "license": "Apache-2.0 AND CC-BY-4.0",
+  "keywords": [
+    "research",
+    "experiments",
+    "autonomous-research",
+    "agent-skill"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Research Loop",
+    "shortDescription": "Bootstrap and run safe research experiments",
+    "longDescription": "Inspect an existing Git research project, compile the user's goal into an execution and evaluation contract, obtain one campaign approval, and run an auditable local experiment loop.",
+    "developerName": "Research Loop contributors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Set up an autonomous research loop for this project"
+    ]
+  }
+}
+
