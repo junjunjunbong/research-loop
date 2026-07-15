@@ -44,7 +44,7 @@ Retrieval/RAG is a future application case, not a dependency of the architecture
 Requirements: Git, `uv`, and Python 3.9 or newer.
 
 ```bash
-git clone <this-repository>
+git clone https://github.com/junjunjunbong/research-loop.git
 cd research-loop
 uv sync --extra dev
 uv run research-loop --help
@@ -117,4 +117,3 @@ The upstream repository's dual-license text is preserved in `LICENSE`. Consult `
 - research/domain packs
 - arbitrary shell pipelines
 - graphical UI, hosted service, or multi-user coordination
-

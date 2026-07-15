@@ -5,7 +5,8 @@
   "author": {
     "name": "Research Loop contributors"
   },
-  "repository": "",
+  "homepage": "https://github.com/junjunjunbong/research-loop",
+  "repository": "https://github.com/junjunjunbong/research-loop",
   "license": "Apache-2.0 AND CC-BY-4.0",
   "keywords": [
     "research",
@@ -25,9 +26,9 @@
       "Read",
       "Write"
     ],
+    "websiteURL": "https://github.com/junjunjunbong/research-loop",
     "defaultPrompt": [
       "Set up an autonomous research loop for this project"
     ]
   }
 }
-
