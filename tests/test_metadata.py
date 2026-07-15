@@ -11,11 +11,33 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_plugin_manifest_and_skill_frontmatter() -> None:
-    manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    assert manifest["name"] == "research-loop"
-    assert manifest["skills"] == "./skills/"
+def test_plugin_manifests_and_marketplace() -> None:
+    codex_manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    claude_manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
+    marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
 
+    assert codex_manifest["name"] == claude_manifest["name"] == "research-loop"
+    assert codex_manifest["version"] == claude_manifest["version"]
+    assert codex_manifest["description"] == claude_manifest["description"]
+    assert codex_manifest["skills"] == "./skills/"
+
+    assert marketplace["name"] == "research-loop"
+    assert len(marketplace["plugins"]) == 1
+    plugin = marketplace["plugins"][0]
+    assert plugin["name"] == claude_manifest["name"]
+    assert plugin["description"] == claude_manifest["description"]
+    assert plugin["source"] == "./"
+    assert (ROOT / "skills" / "research-loop" / "SKILL.md").is_file()
+
+
+def test_claude_project_plugin_settings() -> None:
+    settings = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+    source = settings["extraKnownMarketplaces"]["research-loop"]["source"]
+    assert source == {"source": "directory", "path": "."}
+    assert settings["enabledPlugins"] == {"research-loop@research-loop": True}
+
+
+def test_skill_frontmatter() -> None:
     skill_files = list(ROOT.glob("skills/**/SKILL.md")) + list(ROOT.glob("vendor/**/SKILL.md"))
     assert skill_files
     for path in skill_files:
@@ -47,4 +69,3 @@ def test_vendor_checksums_and_no_signatures() -> None:
         actual = hashlib.sha256((vendor / relative).read_bytes()).hexdigest()
         assert actual == expected
     assert not list(vendor.rglob("skill.oms.sig"))
-

@@ -1,6 +1,6 @@
 # Research Loop
 
-Research Loop is a Codex-first Agent Skill and deterministic runner that turns an existing Git research project plus a user's goal into a bounded, auditable local experiment campaign.
+Research Loop is a portable Agent Skill for Codex and Claude Code plus a deterministic runner that turns an existing Git research project and a user's goal into a bounded, auditable local experiment campaign.
 
 The user supplies the scientific intent. The plugin inspects the repository, compiles project-specific execution and evaluation contracts, renders an exact dry-run plan, obtains one campaign approval, establishes a baseline, and then iterates through minimal hypotheses in isolated Git worktrees.
 
@@ -28,7 +28,7 @@ Retrieval/RAG is a future application case, not a dependency of the architecture
 
 ## v0 capabilities
 
-- Codex plugin manifest and one portable Agent Skill
+- Codex and Claude Code plugin manifests with one portable Agent Skill
 - read-only repository inspection
 - generated `.research/` state and schema validation
 - plan-hash approval bound to goal, commands, policy, resource class, and base commit
@@ -50,7 +50,29 @@ uv sync --extra dev
 uv run research-loop --help
 ```
 
-The plugin manifest is `.codex-plugin/plugin.json`; the skill entrypoint is `skills/research-loop/SKILL.md`.
+The Codex manifest is `.codex-plugin/plugin.json`; the Claude Code manifest and self-hosted marketplace are under `.claude-plugin/`. Both clients use the same skill entrypoint at `skills/research-loop/SKILL.md` and the same Python runner.
+
+### Claude Code
+
+For local plugin development from this checkout:
+
+```bash
+claude plugin marketplace add ./ --scope project
+claude plugin install research-loop@research-loop --scope project
+```
+
+After the Claude Code manifests are available on GitHub, install from the repository-hosted marketplace:
+
+```bash
+claude plugin marketplace add junjunjunbong/research-loop
+claude plugin install research-loop@research-loop --scope project
+```
+
+The Claude Code skill is exposed as:
+
+```text
+/research-loop:research-loop
+```
 
 ## Project setup
 

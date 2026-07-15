@@ -2,7 +2,7 @@
 
 ## v0 — local bootstrap
 
-- one Codex/Agent Skill
+- one portable Agent Skill packaged for Codex and Claude Code
 - deterministic project inspection and generated Research Profile
 - one plan-hash campaign approval
 - isolated local CPU/light experiments
@@ -21,4 +21,3 @@
 - optional research knowledge packs as hypothesis-generation inputs
 - branch comparison and user-driven promotion/merge workflows
 - campaign visualization and multi-project summaries
-

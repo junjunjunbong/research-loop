@@ -1,0 +1,17 @@
+{
+  "name": "research-loop",
+  "version": "0.1.0",
+  "description": "Turn an existing Git research project and a user goal into an approved, auditable experiment loop.",
+  "author": {
+    "name": "Research Loop contributors"
+  },
+  "homepage": "https://github.com/junjunjunbong/research-loop",
+  "repository": "https://github.com/junjunjunbong/research-loop",
+  "license": "Apache-2.0 AND CC-BY-4.0",
+  "keywords": [
+    "research",
+    "experiments",
+    "autonomous-research",
+    "agent-skill"
+  ]
+}
