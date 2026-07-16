@@ -24,7 +24,7 @@ uv run --project "$PLUGIN_ROOT" research-loop <command> --repo "$TARGET_REPO"
 2. Run `inspect` before asking project-structure questions.
 3. Read the candidate entrypoints, evaluators, configs, CI, README, and package metadata. Treat filenames as evidence, never as an authoritative command by themselves.
 4. Compile a profile that follows `references/profile-schema.md`. Store secret names only in `required_env`; never store secret values.
-5. Run `setup`, then `validate`.
+5. Create a schema v1 profile and run `new-campaign --base <git-ref>`, then `validate`. Use `setup` only for legacy schema v0 profiles.
 6. If the authoritative command, metric source, comparison direction, compatibility checks, or allowed paths remain ambiguous, ask the user only about those blockers.
 7. Run `plan` and show the exact commands, metric source, modification scope, resource class, experiment count, and timeout to the user.
 8. Call `approve` only after the user explicitly approves that plan hash. Approval for a different plan, old plan, or general project work is insufficient.
@@ -36,27 +36,30 @@ Setup may inspect a dirty repository, but planning and campaign execution requir
 Follow `references/workflow.md` exactly.
 
 - Create and record a baseline first when none exists.
-- Form one concrete hypothesis from the goal, repository, baseline, and Research Ledger.
-- Use `prepare` to create the experiment branch and isolated external worktree.
+- After each result, call `evidence` for the relevant parent/operator and form 4–6 concrete candidates from the goal, code, baseline, scoped evidence, and Research Ledger.
+- Register candidate specs with `candidate-add`, then call `candidate-rank`. The runner's recommendation is authoritative for deterministic trace quotas and tie breaking.
+- Use `prepare --candidate-id` to create the recommended experiment branch and isolated external worktree.
 - Edit only the approved paths in that worktree. Make one minimal hypothesis commit before any smoke or full run.
 - Run the approved smoke command. Treat it only as plumbing validation.
 - Run the approved full command, then `evaluate` and `record`.
 - Check `status` after every recorded result. Do not stop before the explicit count, budget, deadline, or target is reached.
 - Keep every experiment branch. Never merge a winning branch automatically.
 
-Generate hypotheses dynamically from the actual code and evidence. Do not require a retrieval pack or any other domain pack. Prefer high expected gain, low complexity, and a change that isolates one causal factor.
+Generate hypotheses dynamically from the actual code and evidence. Score alignment, expected impact, feasibility, information gain, and novelty with a short evidence-backed reason. Prefer high expected gain, low complexity, and a change that isolates one causal factor.
+
+Use three logical traces: `exploit` diagnoses and improves the current champion, `explore` tests an orthogonal family, and `confirm` reruns an identical code tree. A `recombine` candidate records two logical source parents but has one primary Git parent; never merge or cherry-pick automatically.
 
 Use the status policy in `references/decision-policy.md`. Never guess a metric from logs when the Evaluation Contract names another source.
 
 ## Recovery
 
-On resume, read `.research/handoff.md`, `.research/state.md`, and the latest Research Ledger row, then run `status` and verify the base Git state. Re-render the plan if the profile, command, policy, or base commit changed; stale approval must not be reused.
+On resume, resolve the active campaign from `.research/index.json`, read its `handoff.md`, `state.md`, and latest Research Ledger row, then run `status` and verify the base Git state. Re-render the plan if the profile, command, policy, or frozen base commit changed; stale approval must not be reused.
 
 Update the checkpoint after setup, approval, experiment preparation, before and after long commands, after a result, when the user changes direction, and before handoff.
 
 ## Safety
 
-Follow `references/safety.md`. v0 permits only local `light` or `local_cpu` argv execution without a shell. GPU, remote, paid, Slurm, SSH, Kubernetes, destructive Git, dataset mutation outside approved paths, and automatic merge are out of scope.
+Follow `references/safety.md`. v1 permits only local `light` or `local_cpu` argv execution without a shell. GPU, remote, paid, Slurm, SSH, Kubernetes, destructive Git, dataset mutation outside approved paths, and automatic merge are out of scope.
 
 ## References
 
@@ -64,4 +67,3 @@ Follow `references/safety.md`. v0 permits only local `light` or `local_cpu` argv
 - `references/workflow.md` — exact setup, baseline, experiment, and recovery flow.
 - `references/decision-policy.md` — result validity and status meanings.
 - `references/safety.md` — approval, Git, resource, path, and credential boundaries.
-

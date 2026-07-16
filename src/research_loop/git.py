@@ -97,6 +97,10 @@ def worktree_head(path: Path) -> str:
     return run(["git", "rev-parse", "HEAD"], cwd=path).stdout.strip()
 
 
+def worktree_tree(path: Path) -> str:
+    return run(["git", "rev-parse", "HEAD^{tree}"], cwd=path).stdout.strip()
+
+
 def resolve_commit(path: Path, value: str) -> str:
     result = run(["git", "rev-parse", "--verify", f"{value}^{{commit}}"], cwd=repo_root(path), check=False)
     if result.returncode != 0:

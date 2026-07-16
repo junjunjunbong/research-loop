@@ -7,29 +7,48 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Sequence
 
 from .errors import ResearchLoopError
+from .candidates import add_candidate, rank_candidates, scoped_evidence
 from .executor import execute_experiment
 from .experiments import prepare_experiment
 from .inspector import inspect_project
 from .ledger import campaign_status, checkpoint, record_experiment
 from .metrics import evaluate_experiment
 from .planning import approve_plan, save_plan
-from .state import profile_validation, setup_project
+from .state import (
+    activate_campaign,
+    list_campaigns,
+    new_campaign,
+    profile_validation,
+    setup_project,
+    upgrade_control_plane,
+)
 
 
 def _repo_parser(subparsers: argparse._SubParsersAction, name: str, help_text: str) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(name, help=help_text)
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help="Target Git project")
+    parser.add_argument("--campaign", help="Campaign id; defaults to the active v1 campaign")
     return parser
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-loop")
-    parser.add_argument("--version", action="version", version="research-loop 0.1.0")
+    parser.add_argument("--version", action="version", version="research-loop 0.2.0")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _repo_parser(subparsers, "inspect", "Inspect project evidence without changing it")
     setup = _repo_parser(subparsers, "setup", "Materialize a compiled Research Profile")
     setup.add_argument("--profile", type=Path, required=True, help="Compiled profile YAML")
+    new = _repo_parser(subparsers, "new-campaign", "Create a schema v1 campaign from an explicit Git base")
+    new.add_argument("--profile", type=Path, required=True, help="Compiled schema v1 profile YAML")
+    new.add_argument("--base", default="HEAD", help="Git revision to freeze as the campaign base")
+    upgrade = _repo_parser(subparsers, "upgrade", "Check or apply a v0 to v1 control-plane migration")
+    upgrade_mode = upgrade.add_mutually_exclusive_group(required=True)
+    upgrade_mode.add_argument("--check", action="store_true")
+    upgrade_mode.add_argument("--apply", action="store_true")
+    _repo_parser(subparsers, "campaign-list", "List local research campaigns")
+    activate = _repo_parser(subparsers, "campaign-activate", "Set the active v1 campaign")
+    activate.add_argument("--id", required=True, dest="campaign_id")
     _repo_parser(subparsers, "validate", "Validate the generated Research Profile")
     _repo_parser(subparsers, "plan", "Render and save a dry-run campaign plan")
     approve = _repo_parser(subparsers, "approve", "Record user approval for an exact plan hash")
@@ -37,10 +56,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     prepare = _repo_parser(subparsers, "prepare", "Create an isolated experiment worktree")
     prepare.add_argument("--id", required=True, dest="experiment_id")
-    prepare.add_argument("--hypothesis", required=True)
+    prepare.add_argument("--hypothesis")
     prepare.add_argument("--hypothesis-id")
     prepare.add_argument("--parent")
     prepare.add_argument("--baseline", action="store_true")
+    prepare.add_argument("--candidate-id")
+
+    candidate_add = _repo_parser(subparsers, "candidate-add", "Register a scored DAG hypothesis candidate")
+    candidate_add.add_argument("--spec", type=Path, required=True)
+    _repo_parser(subparsers, "candidate-rank", "Rank eligible candidates with the deterministic policy")
+    evidence = _repo_parser(subparsers, "evidence", "Render operator-scoped experiment evidence")
+    evidence.add_argument("--candidate-id")
+    evidence.add_argument("--operator")
+    evidence.add_argument("--parent-id")
+    evidence.add_argument("--source-parent-id", action="append", dest="source_parent_ids")
 
     execute = _repo_parser(subparsers, "execute", "Execute an approved smoke or full command")
     execute.add_argument("--id", required=True, dest="experiment_id")
@@ -67,12 +96,33 @@ def dispatch(args: argparse.Namespace) -> Dict[str, Any]:
         return inspect_project(repo)
     if args.command == "setup":
         return setup_project(repo, args.profile)
+    if args.command == "new-campaign":
+        return new_campaign(repo, profile_path=args.profile, base=args.base)
+    if args.command == "upgrade":
+        return upgrade_control_plane(repo, apply=args.apply)
+    if args.command == "campaign-list":
+        return list_campaigns(repo)
+    if args.command == "campaign-activate":
+        return activate_campaign(repo, args.campaign_id)
     if args.command == "validate":
-        return profile_validation(repo)
+        return profile_validation(repo, args.campaign)
     if args.command == "plan":
-        return save_plan(repo)
+        return save_plan(repo, args.campaign)
     if args.command == "approve":
-        return approve_plan(repo, args.plan_hash)
+        return approve_plan(repo, args.plan_hash, args.campaign)
+    if args.command == "candidate-add":
+        return add_candidate(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "candidate-rank":
+        return rank_candidates(repo, args.campaign)
+    if args.command == "evidence":
+        return scoped_evidence(
+            repo,
+            candidate_id=args.candidate_id,
+            operator=args.operator,
+            parent_id=args.parent_id,
+            source_parent_ids=args.source_parent_ids,
+            campaign=args.campaign,
+        )
     if args.command == "prepare":
         return prepare_experiment(
             repo,
@@ -81,17 +131,19 @@ def dispatch(args: argparse.Namespace) -> Dict[str, Any]:
             hypothesis_id=args.hypothesis_id,
             parent=args.parent,
             baseline=args.baseline,
+            candidate_id=args.candidate_id,
+            campaign=args.campaign,
         )
     if args.command == "execute":
-        return execute_experiment(repo, experiment_id=args.experiment_id, mode=args.mode)
+        return execute_experiment(repo, experiment_id=args.experiment_id, mode=args.mode, campaign=args.campaign)
     if args.command == "evaluate":
-        return evaluate_experiment(repo, experiment_id=args.experiment_id, mode=args.mode)
+        return evaluate_experiment(repo, experiment_id=args.experiment_id, mode=args.mode, campaign=args.campaign)
     if args.command == "record":
-        return record_experiment(repo, experiment_id=args.experiment_id, description=args.description)
+        return record_experiment(repo, experiment_id=args.experiment_id, description=args.description, campaign=args.campaign)
     if args.command == "checkpoint":
-        return checkpoint(repo, current=args.current, next_action=args.next_action)
+        return checkpoint(repo, current=args.current, next_action=args.next_action, campaign=args.campaign)
     if args.command == "status":
-        return campaign_status(repo)
+        return campaign_status(repo, args.campaign)
     raise ResearchLoopError(f"unsupported command: {args.command}")
 
 

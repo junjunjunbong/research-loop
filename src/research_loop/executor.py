@@ -6,20 +6,20 @@ import signal
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from .errors import ResearchLoopError
 from .experiments import experiment_dir
-from .git import git_info, repo_root, worktree_head
+from .git import git_info, repo_root, worktree_head, worktree_tree
 from .planning import ensure_approved
-from .state import load_profile, research_dir
+from .state import campaign_dir, ensure_campaign_writable, load_profile
 from .util import confined_path, now_iso, read_json, run, write_json
 
 
-def _campaign_elapsed(repo: Path) -> float:
+def _campaign_elapsed(repo: Path, campaign: Optional[str] = None) -> float:
     total = 0.0
-    runs = research_dir(repo) / "runs"
-    for path in runs.glob("*/*/*/manifest.json"):
+    runs = campaign_dir(repo, campaign) / "runs"
+    for path in runs.rglob("manifest.json"):
         try:
             total += float(json.loads(path.read_text(encoding="utf-8")).get("elapsed_seconds", 0))
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
@@ -32,10 +32,17 @@ def _path_is_within(path: str, scopes: list[str]) -> bool:
     return any(candidate == Path(scope) or Path(scope) in candidate.parents for scope in scopes)
 
 
-def _validate_change_scope(worktree: Path, parent_commit: str, allowed: list[str], protected: list[str], kind: str) -> list[str]:
+def _validate_change_scope(
+    worktree: Path,
+    parent_commit: str,
+    allowed: list[str],
+    protected: list[str],
+    kind: str,
+    operator: str,
+) -> list[str]:
     result = run(["git", "diff", "--name-only", f"{parent_commit}..HEAD"], cwd=worktree)
     changed = [line for line in result.stdout.splitlines() if line.strip()]
-    if kind != "baseline" and not changed:
+    if kind != "baseline" and operator != "confirm" and not changed:
         raise ResearchLoopError("experiment commit does not change any files")
     blocked = [path for path in changed if _path_is_within(path, protected)]
     if blocked:
@@ -46,13 +53,20 @@ def _validate_change_scope(worktree: Path, parent_commit: str, allowed: list[str
     return changed
 
 
-def execute_experiment(repo: Path, *, experiment_id: str, mode: str) -> Dict[str, Any]:
+def execute_experiment(
+    repo: Path,
+    *,
+    experiment_id: str,
+    mode: str,
+    campaign: Optional[str] = None,
+) -> Dict[str, Any]:
     if mode not in {"smoke", "full"}:
         raise ResearchLoopError("mode must be smoke or full")
     root = repo_root(repo)
-    approval = ensure_approved(root)
-    profile = load_profile(root)
-    exp_dir = experiment_dir(root, experiment_id)
+    ensure_campaign_writable(root, campaign)
+    approval = ensure_approved(root, campaign)
+    profile = load_profile(root, campaign)
+    exp_dir = experiment_dir(root, experiment_id, campaign)
     metadata_path = exp_dir / "experiment.json"
     if not metadata_path.exists():
         raise ResearchLoopError(f"experiment is not prepared: {experiment_id}")
@@ -72,6 +86,7 @@ def execute_experiment(repo: Path, *, experiment_id: str, mode: str) -> Dict[str
         profile["context"].get("allowed_paths", []),
         profile["context"].get("protected_paths", []),
         metadata["kind"],
+        metadata.get("operator", "baseline" if metadata["kind"] == "baseline" else "improve"),
     )
 
     run_dir = exp_dir / mode
@@ -94,7 +109,7 @@ def execute_experiment(repo: Path, *, experiment_id: str, mode: str) -> Dict[str
         float(environment["timeout_seconds"]),
         float(policy["experiment_timeout_seconds"]),
     )
-    remaining = float(policy["campaign_timeout_seconds"]) - _campaign_elapsed(root)
+    remaining = float(policy["campaign_timeout_seconds"]) - _campaign_elapsed(root, campaign)
     if remaining <= 0:
         raise ResearchLoopError("campaign wall-clock budget is exhausted")
     if mode == "full" and remaining < configured_timeout:
@@ -134,7 +149,7 @@ def execute_experiment(repo: Path, *, experiment_id: str, mode: str) -> Dict[str
             exit_code = 124
     elapsed = time.monotonic() - started
     manifest = {
-        "schema_version": 0,
+        "schema_version": profile["schema_version"],
         "experiment_id": experiment_id,
         "mode": mode,
         "command": argv,
@@ -142,6 +157,7 @@ def execute_experiment(repo: Path, *, experiment_id: str, mode: str) -> Dict[str
         "worktree": str(worktree),
         "branch": metadata["branch"],
         "commit": commit,
+        "tree_hash": worktree_tree(worktree),
         "parent_commit": metadata["parent_commit"],
         "started_at": started_at,
         "finished_at": now_iso(),

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "research-loop-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bootstrap safe autonomous research loops in existing Git projects."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -27,4 +27,3 @@ packages = ["src/research_loop"]
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]
-

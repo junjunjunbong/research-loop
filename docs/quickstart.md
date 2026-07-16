@@ -20,7 +20,7 @@ Give the inspection result, the user's exact goal, and verified project evidence
 ## 3. Materialize and approve
 
 ```bash
-uv run research-loop setup --repo /path/to/project --profile /tmp/research-profile.yaml
+uv run research-loop new-campaign --repo /path/to/project --profile /tmp/research-profile.yaml --base HEAD
 uv run research-loop validate --repo /path/to/project
 uv run research-loop plan --repo /path/to/project
 ```
@@ -33,5 +33,4 @@ uv run research-loop approve --repo /path/to/project --plan-hash <hash>
 
 ## 4. Run the campaign
 
-Use the exact baseline and experiment sequence in the Skill's `references/workflow.md`. Run `status` after every recorded result and read `.research/handoff.md` when resuming.
-
+Use the exact baseline, evidence, candidate, ranking, and experiment sequence in the Skill's `references/workflow.md`. Run `status` after every recorded result and read the active campaign's `handoff.md` when resuming.

@@ -2,7 +2,7 @@
 
 > Turn an existing Git research project and a scientific goal into a bounded, approved, and auditable experiment campaign.
 
-![Status](https://img.shields.io/badge/status-v0-orange)
+![Status](https://img.shields.io/badge/status-v0.2-blue)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 [![License](https://img.shields.io/badge/license-Apache--2.0%20%2F%20CC--BY--4.0-green)](LICENSE)
 
@@ -10,7 +10,7 @@
 
 Research Loop combines a **portable Agent Skill for Codex and Claude Code** with a **deterministic Python runner**. The skill understands the research intent, inspects the target repository, and proposes focused hypotheses. The runner enforces the parts that should not depend on agent judgment: approval integrity, Git isolation, command execution, metric extraction, result classification, and durable records.
 
-You provide the goal. Research Loop derives the project-specific execution and evaluation contracts from repository evidence, shows the complete dry-run plan for approval, establishes a baseline, and runs each hypothesis in its own Git worktree.
+You provide the goal. Research Loop derives the project-specific execution and evaluation contracts from repository evidence, shows the complete dry-run plan for approval, establishes a baseline, and ranks evidence-backed hypotheses across a small experiment DAG before running each selected node in its own Git worktree.
 
 > [!IMPORTANT]
 > This project contains modified, unofficial derivatives of NVIDIA agent skills. It is not affiliated with, endorsed by, or verified by NVIDIA. See [Upstream and licensing](#upstream-and-licensing).
@@ -28,6 +28,8 @@ Autonomous experimentation becomes difficult to trust when the agent can silentl
 | Evaluation conditions drift | Validate explicit compatibility fields such as dataset version or query count |
 | Long campaigns become hard to resume | Maintain an append-only ledger, checkpoint, and handoff document |
 | The loop runs indefinitely | Enforce experiment-count and wall-clock budgets |
+| Greedy iteration gets stuck on one branch | Balance `exploit`, `explore`, and `confirm` traces with deterministic candidate ranking |
+| A campaign target is confused with a useful local gain | Track baseline, parent, champion, target, and confirmation separately |
 
 The same Agent Skill is packaged for both Codex and Claude Code; both clients delegate deterministic and safety-critical state transitions to the shared Python runner.
 
@@ -38,7 +40,7 @@ Research Loop is useful when you have:
 - a focused goal that can be tested through small code or configuration changes; and
 - a need to preserve every attempt for later inspection.
 
-It is not intended for ordinary bug fixes, general code review, one-off commands, or projects that require GPU, remote, paid, Slurm, SSH, or Kubernetes execution in v0.
+It is not intended for ordinary bug fixes, general code review, one-off commands, or projects that require GPU, remote, paid, Slurm, SSH, or Kubernetes execution in v0.2.
 
 ## How it works
 
@@ -46,8 +48,9 @@ It is not intended for ordinary bug fixes, general code review, one-off commands
 2. **Compile** the verified evidence and exact user goal into a project-specific Research Profile.
 3. **Plan and approve** the commands, metric source, modification scope, resource class, and campaign limits under one exact hash.
 4. **Establish a baseline** as the authoritative comparison anchor.
-5. **Prepare each hypothesis** on its own preserved branch and external Git worktree, leaving the base checkout untouched.
-6. **Execute, evaluate, and record** smoke and full runs through the approved contracts, then append every result to the Research Ledger.
+5. **Generate and rank candidates** using scoped evidence plus a fixed alignment, impact, feasibility, information-gain, and novelty score.
+6. **Prepare the recommended DAG node** on its own preserved branch and external Git worktree, leaving the base checkout untouched.
+7. **Execute, evaluate, and record** smoke and full runs against baseline, parent, and champion, then confirm an identical Git tree before declaring success.
 
 The Agent Skill owns interpretation and hypothesis formation. The runner owns deterministic state transitions and safety checks. Changing the goal, command, policy, resource class, Research Profile, or base commit invalidates the approval and requires a new plan.
 
@@ -61,6 +64,7 @@ The Agent Skill owns interpretation and hypothesis formation. The runner owns de
 | **Evaluation Contract** | Authoritative metric parser, comparison direction, artifacts, compatibility checks, and confirmation policy |
 | **Campaign** | One approved baseline plus a bounded sequence of related experiments |
 | **Research Ledger** | Append-only TSV record connecting each attempt to its branch, commit, command, metric, and decision |
+| **Candidate DAG** | Logical experiment ancestry across exploit, explore, confirm, debug, and recombine operators |
 
 ## Quick start
 
@@ -122,9 +126,10 @@ export TARGET_REPO=/path/to/your-project
 uv run --project "$PLUGIN_ROOT" research-loop inspect \
   --repo "$TARGET_REPO"
 
-uv run --project "$PLUGIN_ROOT" research-loop setup \
+uv run --project "$PLUGIN_ROOT" research-loop new-campaign \
   --repo "$TARGET_REPO" \
-  --profile /tmp/research-profile.yaml
+  --profile /tmp/research-profile.yaml \
+  --base HEAD
 
 uv run --project "$PLUGIN_ROOT" research-loop validate \
   --repo "$TARGET_REPO"
@@ -141,7 +146,7 @@ uv run --project "$PLUGIN_ROOT" research-loop approve \
   --plan-hash <approved-plan-hash>
 ```
 
-The Research Profile is agent-generated; users should not need to author it by hand. Its complete schema and an annotated example are in [`profile-schema.md`](skills/research-loop/references/profile-schema.md) and [`examples/mock-profile.yaml`](examples/mock-profile.yaml).
+The Research Profile is agent-generated; users should not need to author it by hand. Its complete schema and annotated examples are in [`profile-schema.md`](skills/research-loop/references/profile-schema.md), [`examples/mock-profile.yaml`](examples/mock-profile.yaml) for legacy schema v0, and [`examples/mock-profile-v1.yaml`](examples/mock-profile-v1.yaml) for the evidence-guided DAG workflow.
 
 ## Run a campaign
 
@@ -160,14 +165,25 @@ uv run --project "$PLUGIN_ROOT" research-loop evaluate --repo "$TARGET_REPO" --i
 uv run --project "$PLUGIN_ROOT" research-loop record --repo "$TARGET_REPO" --id baseline
 ```
 
-Then prepare one concrete hypothesis:
+Render evidence for the next operator, register a scored candidate, and ask the deterministic policy to rank the eligible DAG nodes:
 
 ```bash
+uv run --project "$PLUGIN_ROOT" research-loop evidence \
+  --repo "$TARGET_REPO" \
+  --operator improve \
+  --parent-id baseline
+
+uv run --project "$PLUGIN_ROOT" research-loop candidate-add \
+  --repo "$TARGET_REPO" \
+  --spec /tmp/candidate.yaml
+
+uv run --project "$PLUGIN_ROOT" research-loop candidate-rank \
+  --repo "$TARGET_REPO"
+
 uv run --project "$PLUGIN_ROOT" research-loop prepare \
   --repo "$TARGET_REPO" \
   --id increase-candidate-pool \
-  --hypothesis-id candidate-pool \
-  --hypothesis "Increasing the first-stage candidate pool will improve recall@10."
+  --candidate-id <recommended-candidate-id>
 ```
 
 `prepare` returns the isolated worktree path. Make only the approved change in that worktree and commit it. The runner rejects an experiment that is uncommitted, changes a protected path, or touches a path outside the approved scope.
@@ -180,7 +196,7 @@ uv run --project "$PLUGIN_ROOT" research-loop record --repo "$TARGET_REPO" --id 
 uv run --project "$PLUGIN_ROOT" research-loop status --repo "$TARGET_REPO"
 ```
 
-Smoke runs validate plumbing only and can never become performance results. A confirmation run uses a new experiment ID with the same hypothesis ID. See the [full campaign workflow](skills/research-loop/references/workflow.md).
+Smoke runs validate plumbing only and can never become performance results. A confirmation uses a new candidate and experiment ID, the `confirm` operator, the current champion as its primary parent, and an identical Git tree. See the [full campaign workflow](skills/research-loop/references/workflow.md).
 
 ## Result states
 
@@ -188,10 +204,10 @@ Every evaluated full run receives one of six explicit states:
 
 | State | Meaning |
 | --- | --- |
-| `promising` | A valid improvement exceeds the threshold, but still needs confirmation |
-| `keep` | A valid baseline, or an improvement confirmed by the required number of runs |
-| `discard` | The primary metric regressed beyond the configured noise tolerance |
-| `inconclusive` | The change is within the uncertainty or minimum-improvement range |
+| `promising` | A valid result improves on its parent, becomes a new champion, or reaches the target, but still needs identical-tree confirmation |
+| `keep` | A valid baseline, or a qualifying code tree confirmed by the required number of compatible full runs |
+| `discard` | The primary metric regressed from its parent beyond the configured noise tolerance |
+| `inconclusive` | A valid result remains within the configured parent-improvement threshold |
 | `crash` | The approved command timed out or exited unsuccessfully |
 | `invalid` | Artifacts, metric parsing, compatibility, duration, or baseline requirements failed |
 
@@ -199,24 +215,28 @@ This distinction prevents execution failures, invalid comparisons, and genuine r
 
 ## State, artifacts, and recovery
 
-`setup` creates a local control plane inside the target repository:
+`new-campaign` creates a schema v1 control plane inside the target repository:
 
 ```text
 .research/
-├── research-context.yaml   # goal, success criteria, and path scope
-├── environment.yaml        # approved commands and execution limits
-├── evaluation.yaml         # metric and compatibility contract
-├── loop-policy.yaml        # campaign identity and budgets
-├── plan.json               # rendered dry run and plan hash
-├── approval.json           # exact approved plan hash
-├── experiments.tsv         # append-only Research Ledger
-├── hypotheses.md           # hypothesis history
-├── state.md                # current checkpoint
-├── handoff.md              # durable resume instructions
-└── runs/<campaign>/<experiment>/
-    ├── experiment.json
-    ├── smoke/{manifest.json,run.log,evaluation.json}
-    └── full/{manifest.json,run.log,evaluation.json}
+├── index.json                         # campaign registry and active campaign
+└── campaigns/<campaign>/
+    ├── research-context.yaml          # goal, success criteria, and path scope
+    ├── environment.yaml               # approved commands and execution limits
+    ├── evaluation.yaml                # metric, target, and compatibility contract
+    ├── loop-policy.yaml               # campaign identity, traces, and budgets
+    ├── plan.json                      # rendered dry run and plan hash
+    ├── approval.json                  # exact approved plan hash
+    ├── candidates.json                # scored DAG candidate registry
+    ├── candidates/                    # immutable per-candidate snapshots
+    ├── experiments.tsv                # append-only Research Ledger
+    ├── hypotheses.md                  # hypothesis history
+    ├── state.md                       # current checkpoint
+    ├── handoff.md                     # durable resume instructions
+    └── runs/<experiment>/
+        ├── experiment.json
+        ├── smoke/{manifest.json,run.log,evaluation.json}
+        └── full/{manifest.json,run.log,evaluation.json}
 ```
 
 `.research/` is added to the target repository's local `.git/info/exclude`, so campaign state does not modify the shared `.gitignore`. Experiment worktrees live outside the project under:
@@ -225,7 +245,7 @@ This distinction prevents execution failures, invalid comparisons, and genuine r
 ~/.cache/research-loop/worktrees/<repo-hash>/<campaign>/<experiment>/
 ```
 
-To resume, read `.research/handoff.md` and `.research/state.md`, inspect the latest ledger row, then run:
+To resume, resolve the active campaign from `.research/index.json`, read its `handoff.md` and `state.md`, inspect the latest ledger row, then run:
 
 ```bash
 uv run --project "$PLUGIN_ROOT" research-loop status --repo "$TARGET_REPO"
@@ -233,9 +253,20 @@ uv run --project "$PLUGIN_ROOT" research-loop status --repo "$TARGET_REPO"
 
 Always verify the base Git state before continuing. A changed base commit or contract makes prior approval stale by design.
 
+### Upgrade legacy state and switch campaigns
+
+Inspect a schema v0 control plane before applying its atomic migration:
+
+```bash
+uv run --project "$PLUGIN_ROOT" research-loop upgrade --repo "$TARGET_REPO" --check
+uv run --project "$PLUGIN_ROOT" research-loop upgrade --repo "$TARGET_REPO" --apply
+```
+
+The migrated campaign remains readable but cannot use DAG candidates. Create a new schema v1 campaign for new experiments. Use `campaign-list` to inspect all campaigns and `campaign-activate --id <campaign-id>` to select the default used when `--campaign` is omitted.
+
 ## Safety boundary
 
-v0 deliberately keeps the execution surface small:
+v0.2 deliberately keeps the execution surface small:
 
 - requires an existing clean Git commit before planning or execution;
 - never edits or switches the user's base checkout;
@@ -256,10 +287,17 @@ All commands emit structured JSON and return exit code `2` for a Research Loop v
 | Command | Purpose |
 | --- | --- |
 | `inspect` | Inspect repository evidence without changing the project |
-| `setup` | Materialize a compiled Research Profile under `.research/` |
+| `new-campaign` | Create a schema v1 campaign from an explicit Git base |
+| `setup` | Materialize a legacy schema v0 Research Profile |
+| `upgrade` | Check or apply a v0-to-v1 control-plane migration |
+| `campaign-list` | List local research campaigns |
+| `campaign-activate` | Select the active schema v1 campaign |
 | `validate` | Validate the profile and report campaign readiness |
 | `plan` | Render and save the dry-run campaign plan |
 | `approve` | Record approval for an exact plan hash |
+| `evidence` | Render evidence scoped to an experiment operator and parent nodes |
+| `candidate-add` | Register a scored DAG hypothesis candidate |
+| `candidate-rank` | Rank eligible candidates with the deterministic policy |
 | `prepare` | Create an experiment branch and isolated worktree |
 | `execute` | Run the approved smoke or full command |
 | `evaluate` | Parse authoritative metrics and assign a result state |
@@ -277,7 +315,7 @@ Run the complete test suite:
 uv run --extra dev pytest
 ```
 
-The integration tests copy [`examples/mock-project/`](examples/mock-project/) into a temporary Git repository and exercise the complete local flow: setup, plan, approval, baseline, isolated experiment, metric parsing, decision, ledger, and handoff. They launch no real training, GPU, remote, or paid workload.
+The integration tests copy [`examples/mock-project/`](examples/mock-project/) into a temporary Git repository and exercise legacy v0 migration plus the schema v1 DAG flow: campaign creation, planning, approval, baseline, evidence, candidate ranking, isolated experiments, metric parsing, confirmation, ledger, and handoff. They launch no real training, GPU, remote, or paid workload.
 
 Further reading:
 
@@ -287,7 +325,7 @@ Further reading:
 - [Bootstrap existing projects ADR](docs/adr/0001-bootstrap-existing-projects.md)
 - [Single skill + isolated runner ADR](docs/adr/0002-single-skill-isolated-runner.md)
 
-## Current v0 limits
+## Current v0.2 limits
 
 - local `light` and `local_cpu` execution only;
 - no GPU, Slurm, SSH, Kubernetes, remote, or paid execution;

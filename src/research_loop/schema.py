@@ -19,6 +19,8 @@ VALID_STATUSES = {
     "crash",
     "invalid",
 }
+SCHEMA_VERSIONS = {0, 1}
+TARGET_TYPES = {"relative_improvement", "absolute_improvement", "metric_value"}
 PARSER_TYPES = {"json", "jsonl", "regex"}
 SECRET_KEY_RE = re.compile(r"(?:password|secret|credential|api[_-]?key|token)", re.I)
 
@@ -85,7 +87,7 @@ def _reject_secrets(value: Any, prefix: str = "profile") -> None:
 
 def normalize_profile(profile: Dict[str, Any], repo: Path) -> Dict[str, Any]:
     result = deepcopy(profile)
-    result.setdefault("schema_version", 0)
+    result.setdefault("schema_version", 1)
     policy = result.setdefault("policy", {})
     if isinstance(policy, dict):
         policy.setdefault("campaign_id", f"{datetime.now().astimezone():%Y-%m-%d}-{repo.name.lower().replace('_', '-')}")
@@ -112,12 +114,28 @@ def normalize_profile(profile: Dict[str, Any], repo: Path) -> Dict[str, Any]:
         evaluation.setdefault("confirmation_runs", 2)
         evaluation.setdefault("min_delta", 0.0)
         evaluation.setdefault("noise_tolerance", 0.0)
+        if result["schema_version"] == 1:
+            evaluation.setdefault(
+                "acceptance",
+                {
+                    "min_parent_delta": evaluation.get("min_delta", 0.0),
+                    "noise_tolerance": evaluation.get("noise_tolerance", 0.0),
+                },
+            )
+            evaluation.setdefault(
+                "target",
+                {
+                    "type": "absolute_improvement",
+                    "value": evaluation.get("min_delta", 0.0),
+                },
+            )
     return result
 
 
 def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
-    if profile.get("schema_version") != 0:
-        raise ResearchLoopError("schema_version must be 0")
+    version = profile.get("schema_version")
+    if version not in SCHEMA_VERSIONS:
+        raise ResearchLoopError(f"schema_version must be one of {sorted(SCHEMA_VERSIONS)}")
     _reject_secrets(profile)
 
     context = _mapping(profile.get("context"), "context")
@@ -156,6 +174,22 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
         raise ResearchLoopError("evaluation.confirmation_runs must be an integer >= 2")
     _positive_number(evaluation.get("min_delta", 0), "evaluation.min_delta", allow_zero=True)
     _positive_number(evaluation.get("noise_tolerance", 0), "evaluation.noise_tolerance", allow_zero=True)
+    if version == 1:
+        acceptance = _mapping(evaluation.get("acceptance"), "evaluation.acceptance")
+        _positive_number(
+            acceptance.get("min_parent_delta", 0),
+            "evaluation.acceptance.min_parent_delta",
+            allow_zero=True,
+        )
+        _positive_number(
+            acceptance.get("noise_tolerance", 0),
+            "evaluation.acceptance.noise_tolerance",
+            allow_zero=True,
+        )
+        target = _mapping(evaluation.get("target"), "evaluation.target")
+        if target.get("type") not in TARGET_TYPES:
+            raise ResearchLoopError(f"evaluation.target.type must be one of {sorted(TARGET_TYPES)}")
+        _positive_number(target.get("value"), "evaluation.target.value", allow_zero=True)
     compatibility = evaluation.get("compatibility", [])
     if not isinstance(compatibility, list):
         raise ResearchLoopError("evaluation.compatibility must be a list")
@@ -186,9 +220,10 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
 
 
 def split_profile(profile: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    version = profile["schema_version"]
     return {
-        "research-context.yaml": {"schema_version": 0, "context": profile["context"]},
-        "environment.yaml": {"schema_version": 0, "environment": profile["environment"]},
-        "evaluation.yaml": {"schema_version": 0, "evaluation": profile["evaluation"]},
-        "loop-policy.yaml": {"schema_version": 0, "policy": profile["policy"]},
+        "research-context.yaml": {"schema_version": version, "context": profile["context"]},
+        "environment.yaml": {"schema_version": version, "environment": profile["environment"]},
+        "evaluation.yaml": {"schema_version": version, "evaluation": profile["evaluation"]},
+        "loop-policy.yaml": {"schema_version": version, "policy": profile["policy"]},
     }

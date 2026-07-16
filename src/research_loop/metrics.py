@@ -11,7 +11,7 @@ from .experiments import experiment_dir
 from .git import repo_root
 from .planning import ensure_approved
 from .schema import VALID_STATUSES
-from .state import load_profile, read_ledger
+from .state import ensure_campaign_writable, load_profile, read_ledger
 from .util import canonical_hash, confined_path, dotted_get, now_iso, read_json, write_json
 
 
@@ -67,11 +67,46 @@ def _baseline_value(rows: List[Dict[str, str]]) -> Optional[float]:
     return None
 
 
-def evaluate_experiment(repo: Path, *, experiment_id: str, mode: str = "full") -> Dict[str, Any]:
+def _improvement(value: float, reference: float, direction: str) -> float:
+    delta = value - reference
+    return delta if direction == "maximize" else -delta
+
+
+def _champion_row(rows: List[Dict[str, str]], direction: str) -> Optional[Dict[str, str]]:
+    valid = [row for row in rows if row.get("metric_value") and row.get("status") not in {"invalid", "crash"}]
+    if not valid:
+        return None
+    best_value = (max if direction == "maximize" else min)(float(row["metric_value"]) for row in valid)
+    tied = [row for row in valid if float(row["metric_value"]) == best_value]
+    return max(
+        tied,
+        key=lambda row: (row.get("confirmed", "").lower() == "true", int(row.get("index", "0") or 0)),
+    )
+
+
+def _target_reached(value: float, baseline: float, direction: str, target: Dict[str, Any]) -> bool:
+    kind = target["type"]
+    threshold = float(target["value"])
+    improvement = _improvement(value, baseline, direction)
+    if kind == "absolute_improvement":
+        return improvement >= threshold
+    if kind == "relative_improvement":
+        return abs(baseline) > 0 and improvement / abs(baseline) >= threshold
+    return value >= threshold if direction == "maximize" else value <= threshold
+
+
+def evaluate_experiment(
+    repo: Path,
+    *,
+    experiment_id: str,
+    mode: str = "full",
+    campaign: Optional[str] = None,
+) -> Dict[str, Any]:
     root = repo_root(repo)
-    ensure_approved(root)
-    profile = load_profile(root)
-    exp_dir = experiment_dir(root, experiment_id)
+    ensure_campaign_writable(root, campaign)
+    ensure_approved(root, campaign)
+    profile = load_profile(root, campaign)
+    exp_dir = experiment_dir(root, experiment_id, campaign)
     metadata = read_json(exp_dir / "experiment.json")
     manifest = read_json(exp_dir / mode / "manifest.json")
     worktree = Path(manifest["worktree"]).resolve()
@@ -79,7 +114,7 @@ def evaluate_experiment(repo: Path, *, experiment_id: str, mode: str = "full") -
     evaluation = profile["evaluation"]
     primary = evaluation["primary_metric"]
     result: Dict[str, Any] = {
-        "schema_version": 0,
+        "schema_version": profile["schema_version"],
         "experiment_id": experiment_id,
         "hypothesis_id": metadata["hypothesis_id"],
         "kind": metadata["kind"],
@@ -88,6 +123,7 @@ def evaluate_experiment(repo: Path, *, experiment_id: str, mode: str = "full") -
         "metric_value": None,
         "baseline_value": None,
         "delta": None,
+        "tree_hash": manifest.get("tree_hash"),
         "status": "invalid",
         "reasons": [],
         "compatibility": [],
@@ -132,10 +168,24 @@ def evaluate_experiment(repo: Path, *, experiment_id: str, mode: str = "full") -
             result["compatibility"].append(entry)
 
         if not result["reasons"]:
-            rows = read_ledger(root)
+            rows = read_ledger(root, campaign)
             if metadata["kind"] == "baseline":
                 result["status"] = "keep"
                 result["reasons"].append("valid baseline anchor")
+                if profile["schema_version"] == 1:
+                    result.update(
+                        {
+                            "parent_value": None,
+                            "champion_before_value": None,
+                            "delta_vs_baseline": 0.0,
+                            "delta_vs_parent": None,
+                            "delta_vs_champion": None,
+                            "local_improvement": False,
+                            "new_champion": True,
+                            "target_reached": False,
+                            "confirmed": True,
+                        }
+                    )
             else:
                 baseline = _baseline_value(rows)
                 if baseline is None:
@@ -143,31 +193,99 @@ def evaluate_experiment(repo: Path, *, experiment_id: str, mode: str = "full") -
                 else:
                     value = float(result["metric_value"])
                     delta = value - baseline
-                    improvement = delta if primary["direction"] == "maximize" else -delta
+                    improvement = _improvement(value, baseline, primary["direction"])
                     result["baseline_value"] = baseline
                     result["delta"] = delta
-                    noise = float(evaluation.get("noise_tolerance", 0))
-                    threshold = max(noise, float(evaluation.get("min_delta", 0)))
-                    if improvement > threshold:
-                        prior_confirmations = sum(
+                    if profile["schema_version"] == 0:
+                        noise = float(evaluation.get("noise_tolerance", 0))
+                        threshold = max(noise, float(evaluation.get("min_delta", 0)))
+                        if improvement > threshold:
+                            prior_confirmations = sum(
+                                1
+                                for row in rows
+                                if row.get("hypothesis_id") == metadata["hypothesis_id"]
+                                and row.get("status") in {"promising", "keep"}
+                            )
+                            confirmed = prior_confirmations + 1
+                            if confirmed >= int(evaluation["confirmation_runs"]):
+                                result["status"] = "keep"
+                                result["reasons"].append(f"improvement confirmed in {confirmed} valid runs")
+                            else:
+                                result["status"] = "promising"
+                                result["reasons"].append("single valid improvement requires confirmation")
+                        elif improvement < -noise:
+                            result["status"] = "discard"
+                            result["reasons"].append("primary metric regressed beyond noise tolerance")
+                        else:
+                            result["status"] = "inconclusive"
+                            result["reasons"].append("metric change is within the inconclusive range")
+                    else:
+                        direction = primary["direction"]
+                        parent = next(
+                            (row for row in rows if row.get("experiment_id") == metadata.get("primary_parent_id")),
+                            None,
+                        )
+                        parent_value = float(parent["metric_value"]) if parent and parent.get("metric_value") else None
+                        champion = _champion_row(rows, direction)
+                        champion_value = float(champion["metric_value"]) if champion else None
+                        acceptance = evaluation["acceptance"]
+                        noise = float(acceptance["noise_tolerance"])
+                        parent_threshold = max(noise, float(acceptance["min_parent_delta"]))
+                        parent_improvement = (
+                            _improvement(value, parent_value, direction) if parent_value is not None else None
+                        )
+                        champion_improvement = (
+                            _improvement(value, champion_value, direction) if champion_value is not None else None
+                        )
+                        local_improvement = parent_improvement is not None and parent_improvement > parent_threshold
+                        new_champion = champion_improvement is None or champion_improvement > noise
+                        target_reached = _target_reached(value, baseline, direction, evaluation["target"])
+                        compatibility_hash = result["compatibility_hash"]
+                        tree_hash = manifest.get("tree_hash")
+                        qualifying_run = target_reached or improvement > parent_threshold
+                        prior_same_tree = sum(
                             1
                             for row in rows
-                            if row.get("hypothesis_id") == metadata["hypothesis_id"]
-                            and row.get("status") in {"promising", "keep"}
+                            if row.get("kind") != "baseline"
+                            and row.get("tree_hash") == tree_hash
+                            and row.get("compatibility_hash") == compatibility_hash
+                            and row.get("status") not in {"invalid", "crash"}
+                            and row.get("metric_value")
+                            and (
+                                row.get("target_reached", "").lower() == "true"
+                                or _improvement(float(row["metric_value"]), baseline, direction) > parent_threshold
+                            )
                         )
-                        confirmed = prior_confirmations + 1
-                        if confirmed >= int(evaluation["confirmation_runs"]):
+                        confirmation_count = prior_same_tree + 1
+                        confirmed = qualifying_run and confirmation_count >= int(evaluation["confirmation_runs"])
+                        result.update(
+                            {
+                                "parent_value": parent_value,
+                                "champion_before_value": champion_value,
+                                "delta_vs_baseline": value - baseline,
+                                "delta_vs_parent": None if parent_value is None else value - parent_value,
+                                "delta_vs_champion": None if champion_value is None else value - champion_value,
+                                "local_improvement": local_improvement,
+                                "new_champion": new_champion,
+                                "target_reached": target_reached,
+                                "confirmed": confirmed,
+                                "confirmation_count": confirmation_count,
+                            }
+                        )
+                        if confirmed:
                             result["status"] = "keep"
-                            result["reasons"].append(f"improvement confirmed in {confirmed} valid runs")
-                        else:
+                            result["reasons"].append(
+                                f"identical code tree confirmed in {confirmation_count} compatible full runs"
+                            )
+                        elif parent_improvement is not None and parent_improvement < -noise:
+                            result["status"] = "discard"
+                            result["reasons"].append("primary metric regressed from parent beyond noise tolerance")
+                        elif local_improvement or new_champion or target_reached:
                             result["status"] = "promising"
-                            result["reasons"].append("single valid improvement requires confirmation")
-                    elif improvement < -noise:
-                        result["status"] = "discard"
-                        result["reasons"].append("primary metric regressed beyond noise tolerance")
-                    else:
-                        result["status"] = "inconclusive"
-                        result["reasons"].append("metric change is within the inconclusive range")
+                            result["reasons"].append("valid improvement requires identical-tree confirmation")
+                        else:
+                            result["status"] = "inconclusive"
+                            result["reasons"].append("valid result is within the parent improvement threshold")
 
     if result["status"] not in VALID_STATUSES:
         raise ResearchLoopError(f"internal invalid status: {result['status']}")

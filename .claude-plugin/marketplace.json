@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "research-loop",
-  "description": "Claude Code plugins for bounded, auditable research experiment campaigns.",
+  "description": "Claude Code plugins for bounded, evidence-guided research experiment campaigns.",
   "owner": {
     "name": "Research Loop contributors"
   },
@@ -9,7 +9,7 @@
     {
       "name": "research-loop",
       "source": "./",
-      "description": "Turn an existing Git research project and a user goal into an approved, auditable experiment loop."
+      "description": "Turn an existing Git research project and a user goal into an approved, evidence-guided experiment DAG."
     }
   ]
 }
