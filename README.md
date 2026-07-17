@@ -81,6 +81,40 @@ uv run research-loop --help
 
 The Codex manifest is at [`.codex-plugin/plugin.json`](.codex-plugin/plugin.json). The Claude Code [plugin manifest](.claude-plugin/plugin.json) and [self-hosted marketplace](.claude-plugin/marketplace.json) are under `.claude-plugin/`. Both clients use the same Agent Skill entrypoint at [`skills/research-loop/SKILL.md`](skills/research-loop/SKILL.md) and the same Python runner.
 
+#### Codex plugin install
+
+The canonical Codex identity is `research-loop@research-loop`. Register the
+repository as a Git marketplace at an immutable release tag or full commit SHA,
+then install the plugin from that marketplace:
+
+```bash
+codex plugin marketplace add junjunjunbong/research-loop \
+  --ref 210696d0bcc0f4a432c55ae51b553a0682dd7549
+codex plugin add research-loop@research-loop
+```
+
+That SHA is the immutable 0.2.0 source. Future releases should replace it with
+their own immutable tag or full commit SHA.
+
+Do not register a mutable development checkout as the live marketplace source.
+Codex installs a cached copy, but refreshing a local marketplace that follows a
+branch-changing checkout can replace that cache with a different version.
+
+To migrate a machine that previously used the legacy local marketplace, keep
+the old installation until the canonical install above succeeds. Verify it,
+then remove only the legacy identity and marketplace:
+
+```bash
+codex plugin list --marketplace research-loop
+codex plugin remove research-loop@local-research-loop
+codex plugin marketplace remove local-research-loop
+codex plugin list
+```
+
+The repository-owned Codex marketplace manifest is
+[`.agents/plugins/marketplace.json`](.agents/plugins/marketplace.json). Its
+marketplace name and plugin name are both `research-loop`, matching Claude Code.
+
 #### Claude Code plugin install
 
 For local plugin development from this checkout:

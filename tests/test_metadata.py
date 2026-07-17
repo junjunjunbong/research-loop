@@ -9,12 +9,18 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_IDENTITY = "research-loop@research-loop"
 
 
 def test_plugin_manifests_and_marketplace() -> None:
     codex_manifest = json.loads((ROOT / ".codex-plugin" / "plugin.json").read_text(encoding="utf-8"))
     claude_manifest = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))
-    marketplace = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    claude_marketplace = json.loads(
+        (ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8")
+    )
+    codex_marketplace = json.loads(
+        (ROOT / ".agents" / "plugins" / "marketplace.json").read_text(encoding="utf-8")
+    )
 
     assert codex_manifest["name"] == claude_manifest["name"] == "research-loop"
     assert codex_manifest["version"] == claude_manifest["version"]
@@ -22,12 +28,20 @@ def test_plugin_manifests_and_marketplace() -> None:
     assert codex_manifest["description"] == claude_manifest["description"]
     assert codex_manifest["skills"] == "./skills/"
 
-    assert marketplace["name"] == "research-loop"
-    assert len(marketplace["plugins"]) == 1
-    plugin = marketplace["plugins"][0]
-    assert plugin["name"] == claude_manifest["name"]
-    assert plugin["description"] == claude_manifest["description"]
-    assert plugin["source"] == "./"
+    assert codex_marketplace["name"] == claude_marketplace["name"] == "research-loop"
+    assert codex_marketplace["interface"]["displayName"] == "Research Loop"
+    assert len(codex_marketplace["plugins"]) == len(claude_marketplace["plugins"]) == 1
+
+    codex_plugin = codex_marketplace["plugins"][0]
+    claude_plugin = claude_marketplace["plugins"][0]
+    assert codex_plugin["name"] == claude_plugin["name"] == claude_manifest["name"]
+    assert codex_plugin["source"] == claude_plugin["source"] == "./"
+    assert codex_plugin["policy"] == {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL",
+    }
+    assert codex_plugin["category"] == "Education & Research"
+    assert claude_plugin["description"] == claude_manifest["description"]
     assert (ROOT / "skills" / "research-loop" / "SKILL.md").is_file()
 
 
@@ -35,7 +49,19 @@ def test_claude_project_plugin_settings() -> None:
     settings = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
     source = settings["extraKnownMarketplaces"]["research-loop"]["source"]
     assert source == {"source": "directory", "path": "."}
-    assert settings["enabledPlugins"] == {"research-loop@research-loop": True}
+    assert settings["enabledPlugins"] == {CANONICAL_IDENTITY: True}
+
+
+def test_repository_packaging_has_no_legacy_marketplace_identity() -> None:
+    packaging_files = [
+        ROOT / ".agents" / "plugins" / "marketplace.json",
+        ROOT / ".codex-plugin" / "plugin.json",
+        ROOT / ".claude-plugin" / "marketplace.json",
+        ROOT / ".claude-plugin" / "plugin.json",
+        ROOT / ".claude" / "settings.json",
+    ]
+    for path in packaging_files:
+        assert "local-research-loop" not in path.read_text(encoding="utf-8"), path
 
 
 def test_skill_frontmatter() -> None:

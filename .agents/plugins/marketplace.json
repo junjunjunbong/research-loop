@@ -1,0 +1,17 @@
+{
+  "name": "research-loop",
+  "interface": {
+    "displayName": "Research Loop"
+  },
+  "plugins": [
+    {
+      "name": "research-loop",
+      "source": "./",
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Education & Research"
+    }
+  ]
+}
