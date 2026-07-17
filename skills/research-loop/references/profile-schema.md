@@ -75,11 +75,20 @@ policy:
   allow_paid: false
   allow_shell: false
   auto_commit: true
+  knowledge_access:           # optional; omit for no external idea supply
+    mode: local_pack          # none | local_pack | agent_retrieval
+    allow_network: false      # true required (and allowed) only for agent_retrieval
+    allowed_source_types: [paper, pull_request, issue, user_note, repository_artifact]
+    max_sources_per_round: 20
+    max_record_bytes: 16384
+    retrieval_cutoff: ""      # optional ISO date; used by agent retrieval
 ```
 
 All paths are relative and confined to the target project or experiment worktree. Commands are argv arrays executed with `shell=False`. `new-campaign --base <git-ref>` resolves the base to an immutable commit included in the approval hash. The Strategy Contract is also approval-bound and becomes immutable after the first ledger row.
 
 Supported transition triggers are `baseline_recorded`, `experiments_recorded_gte`, `promising_results_gte`, `consecutive_inconclusive_gte`, `target_reached`, and `remaining_experiments_lte`. The runner applies at most one matching rule after each recorded result, using the lowest numeric priority first. Confirmation remains a global obligation rather than a Selector.
+
+`policy.knowledge_access` is approval-bound like the rest of the policy: it appears in the dry run and its change invalidates approval. When it is present with a mode other than `none`, every `idea_sources` entry must match a record registered in the campaign Knowledge Pack (`pack-add`, verified by `pack-verify`); when it is absent, hash-pinned `idea_sources` are still accepted but no pack exists. `allow_network` governs agent-side retrieval only — the runner never fetches.
 
 ## Hypothesis specification
 

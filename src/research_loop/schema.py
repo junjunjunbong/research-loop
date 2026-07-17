@@ -42,6 +42,8 @@ VALUE_TRANSITION_TRIGGERS = {
     "remaining_experiments_lte",
 }
 SECRET_KEY_RE = re.compile(r"(?:password|secret|credential|api[_-]?key|token)", re.I)
+IDEA_SOURCE_TYPES = {"paper", "pull_request", "issue", "user_note", "repository_artifact"}
+KNOWLEDGE_MODES = {"none", "local_pack", "agent_retrieval"}
 
 
 def _mapping(value: Any, field: str) -> Dict[str, Any]:
@@ -293,6 +295,42 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
             raise ResearchLoopError(f"the runner requires policy.{key}: false")
     if policy.get("auto_commit") is not True:
         raise ResearchLoopError("the runner requires policy.auto_commit: true for isolated experiment worktrees")
+    access = policy.get("knowledge_access")
+    if access is not None:
+        access = _mapping(access, "policy.knowledge_access")
+        mode = access.get("mode")
+        if mode not in KNOWLEDGE_MODES:
+            raise ResearchLoopError(
+                f"policy.knowledge_access.mode must be one of {sorted(KNOWLEDGE_MODES)}"
+            )
+        allow_network = access.get("allow_network", False)
+        if not isinstance(allow_network, bool):
+            raise ResearchLoopError("policy.knowledge_access.allow_network must be a boolean")
+        if mode == "agent_retrieval" and allow_network is not True:
+            raise ResearchLoopError(
+                "policy.knowledge_access.allow_network must be true for agent_retrieval"
+            )
+        if mode != "agent_retrieval" and allow_network:
+            raise ResearchLoopError(
+                "policy.knowledge_access.allow_network is only allowed for agent_retrieval"
+            )
+        types = access.get("allowed_source_types", sorted(IDEA_SOURCE_TYPES))
+        if (
+            not isinstance(types, list)
+            or not types
+            or not set(types) <= IDEA_SOURCE_TYPES
+            or len(set(types)) != len(types)
+        ):
+            raise ResearchLoopError(
+                "policy.knowledge_access.allowed_source_types must be a non-empty subset of "
+                f"{sorted(IDEA_SOURCE_TYPES)}"
+            )
+        for key in ("max_sources_per_round", "max_record_bytes"):
+            value = access.get(key, 1)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ResearchLoopError(f"policy.knowledge_access.{key} must be a positive integer")
+        if not isinstance(access.get("retrieval_cutoff", ""), str):
+            raise ResearchLoopError("policy.knowledge_access.retrieval_cutoff must be a string")
 
     if version == 2:
         _validate_strategy(profile.get("strategy"))

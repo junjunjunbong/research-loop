@@ -11,6 +11,7 @@ from .util import canonical_hash, read_yaml
 
 from .candidates import _normalize_candidate, champion_row, list_candidates
 from .hypotheses import list_hypotheses, normalize_idea_source
+from .knowledge import resolve_knowledge_access, source_identity, verified_identity_hashes
 from .strategy import read_strategy_state, selector_definition
 
 
@@ -233,7 +234,9 @@ def proposal_context(repo: Path, campaign: Optional[str] = None) -> Dict[str, An
 
 
 def validate_proposal(repo: Path, *, spec_path: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
-    _require_v2(repo, campaign)
+    profile = _require_v2(repo, campaign)
+    access = resolve_knowledge_access(profile["policy"])
+    registered = verified_identity_hashes(repo, campaign) if access["mode"] != "none" else {}
     spec = read_yaml(spec_path.resolve())
     if spec.get("schema_version") != 2:
         raise ResearchLoopError("proposal schema_version must be 2")
@@ -281,6 +284,30 @@ def validate_proposal(repo: Path, *, spec_path: Path, campaign: Optional[str] = 
                 {"index": index, "slot": slot, "candidate_id": candidate_id, "reasons": [str(exc)]}
             )
             continue
+        if access["mode"] != "none":
+            item_sources = normalized["idea_sources"] + normalized.get("hypothesis", {}).get(
+                "idea_sources", []
+            )
+            missing = sorted(
+                {
+                    source["locator"]
+                    for source in item_sources
+                    if canonical_hash(source_identity(source)) not in registered
+                }
+            )
+            if missing:
+                rejected.append(
+                    {
+                        "index": index,
+                        "slot": normalized["slot"],
+                        "candidate_id": normalized["candidate"]["candidate_id"],
+                        "reasons": [
+                            f"idea source is not registered in the knowledge pack: {locator}"
+                            for locator in missing
+                        ],
+                    }
+                )
+                continue
         if "hypothesis" in normalized:
             proposed_hypothesis_ids.add(normalized["hypothesis"]["hypothesis_id"])
         proposed_candidate_ids.add(normalized["candidate"]["candidate_id"])
@@ -297,6 +324,11 @@ def validate_proposal(repo: Path, *, spec_path: Path, campaign: Optional[str] = 
             }
             identity_by_hash[canonical_hash(identity)] = identity
     source_identities = [identity_by_hash[key] for key in sorted(identity_by_hash)]
+    if access["mode"] != "none" and len(source_identities) > access["max_sources_per_round"]:
+        raise ResearchLoopError(
+            f"proposal references {len(source_identities)} sources; "
+            f"knowledge_access.max_sources_per_round is {access['max_sources_per_round']}"
+        )
     return {
         "schema_version": 2,
         "proposal_id": proposal_id,

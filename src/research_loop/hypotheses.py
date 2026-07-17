@@ -5,9 +5,11 @@ from typing import Any, Dict, List, Optional
 
 from .errors import ResearchLoopError
 from .git import validate_slug
+from .schema import IDEA_SOURCE_TYPES
 from .state import campaign_dir, load_profile, read_ledger
 from .util import (
     append_jsonl,
+    canonical_hash,
     confined_path,
     now_iso,
     read_json,
@@ -20,7 +22,6 @@ from .util import (
 RELATIONS = {"supports", "weakens", "falsifies", "inconclusive"}
 ASSESSMENTS = {"open", "supported", "contested", "falsified"}
 SOURCE_TYPES = {"primary_metric", "run_log", "artifact"}
-IDEA_SOURCE_TYPES = {"paper", "pull_request", "issue", "user_note", "repository_artifact"}
 
 
 def normalize_idea_source(value: Any, field: str) -> Dict[str, Any]:
@@ -148,6 +149,23 @@ def add_hypothesis(repo: Path, *, spec_path: Path, campaign: Optional[str] = Non
     normalized_sources = [
         normalize_idea_source(item, f"idea_sources[{index}]") for index, item in enumerate(sources)
     ]
+    if normalized_sources:
+        from .knowledge import resolve_knowledge_access, source_identity, verified_identity_hashes
+
+        access = resolve_knowledge_access(load_profile(repo, campaign)["policy"])
+        if access["mode"] != "none":
+            registered = verified_identity_hashes(repo, campaign)
+            missing = sorted(
+                {
+                    source["locator"]
+                    for source in normalized_sources
+                    if canonical_hash(source_identity(source)) not in registered
+                }
+            )
+            if missing:
+                raise ResearchLoopError(
+                    f"idea sources are not registered in the knowledge pack: {', '.join(missing)}"
+                )
     timestamp = now_iso()
     hypothesis = {
         "hypothesis_id": hypothesis_id,

@@ -27,6 +27,10 @@ research-loop record --repo "$TARGET_REPO" --id baseline
 ## Evidence, candidates, and experiment
 
 ```bash
+# only when policy.knowledge_access is configured
+research-loop pack-add --repo "$TARGET_REPO" --spec /tmp/source.yaml
+research-loop pack-verify --repo "$TARGET_REPO"
+
 research-loop proposal-context --repo "$TARGET_REPO"
 research-loop evidence --repo "$TARGET_REPO" --operator improve --parent-id baseline
 # author /tmp/proposal.yaml per references/proposal-guide.md

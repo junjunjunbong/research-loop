@@ -13,6 +13,7 @@ from .experiments import prepare_experiment
 from .hypotheses import add_hypothesis, add_hypothesis_evidence, list_hypotheses
 from .inspector import inspect_project
 from .ledger import campaign_status, checkpoint, record_experiment
+from .knowledge import add_pack_record, verify_pack
 from .metrics import evaluate_experiment
 from .planning import approve_plan, save_plan
 from .proposals import portfolio_lint, proposal_context, validate_proposal
@@ -91,6 +92,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lint.add_argument("--spec", type=Path, help="Optional proposal file to lint together with pending candidates")
     _repo_parser(subparsers, "proposal-context", "Render the deterministic hypothesis-generation context")
+    pack_add = _repo_parser(subparsers, "pack-add", "Register one immutable knowledge pack record")
+    pack_add.add_argument("--spec", type=Path, required=True)
+    _repo_parser(subparsers, "pack-verify", "Verify knowledge pack hashes, schema, and policy")
 
     execute = _repo_parser(subparsers, "execute", "Execute an approved smoke or full command")
     execute.add_argument("--id", required=True, dest="experiment_id")
@@ -147,6 +151,10 @@ def dispatch(args: argparse.Namespace) -> Dict[str, Any]:
         return portfolio_lint(repo, spec_path=args.spec, campaign=args.campaign)
     if args.command == "proposal-context":
         return proposal_context(repo, args.campaign)
+    if args.command == "pack-add":
+        return add_pack_record(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "pack-verify":
+        return verify_pack(repo, args.campaign)
     if args.command == "evidence":
         return scoped_evidence(
             repo,

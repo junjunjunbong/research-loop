@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 from .errors import ResearchLoopError
 from .git import ensure_clean, git_info, repo_root
+from .knowledge import resolve_knowledge_access
 from .state import (
     campaign_dir,
     campaign_metadata,
@@ -56,6 +57,7 @@ def build_plan(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
         "modification_scope": contract["context"].get("allowed_paths", []),
         "protected_paths": contract["context"].get("protected_paths", []),
         "base_commit": contract["base_commit"],
+        "knowledge_access": resolve_knowledge_access(contract["policy"]),
     }
     if contract["schema_version"] == 2:
         dry_run["strategy"] = contract["strategy"]

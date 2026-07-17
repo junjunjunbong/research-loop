@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0–PR4 done. Next: PR5 (Knowledge Pack storage + verification).
+Status: PR0–PR5 done. Next: PR6 (research surface) or PR7 (agent retrieval).
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -95,7 +95,8 @@ Deviation from the original sketch: `handoff.md` renders no hypothesis section a
 - `origin_evidence` remains mandatory (principle 4). `hypothesis-list` and checkpoint/handoff rendering show source summaries.
 - Backward compatible with existing v2 stores.
 
-### PR5 — Knowledge Pack storage and verification
+### PR5 — Knowledge Pack storage and verification — DONE
+Deviations from the sketch: record fields use `applicability` (string, matching `idea_sources`) rather than `applicability_conditions`; the pack lives at `<campaign>/knowledge/records/*.json` + `SHA256SUMS`; `hypothesis-add` also enforces pack registration when a mode is configured (closes the bypass around proposal validation); `IDEA_SOURCE_TYPES` moved to `schema.py` to avoid an import cycle; `normalize_profile` never injects `knowledge_access`, so existing campaign plan hashes are unchanged.
 - Content-addressed pack (records + `SHA256SUMS`, mirroring `vendor/` practice) holding normalized claim records: `source_id`, `source_type`, `revision`, `content_sha256`, `claim`, `applicability_conditions`, `prohibited_interpretations`, `usage`, `license`. The pack format is the same whether the user authors it or the agent fills it via retrieval (PR7).
 - `policy.knowledge_access` in the profile (`mode: none | local_pack | agent_retrieval`, `allow_network`, `allowed_source_types`, `max_sources_per_round`, size caps). Approval-bound automatically via the policy section; extend the dry-run display (`planning.py`) to show it. `allow_network` is distinct from the existing `allow_remote` (execution); it defaults false and is required (and only meaningful) for `agent_retrieval`.
 - Runner `pack-verify`: existence, hashes, schema, allowed types, size limits, secret-like field scan. Optional `pack-add --spec`: append one normalized record and refresh `SHA256SUMS` so hashing stays honest. `proposal-validate` cross-checks `idea_sources` against a verified pack when one is configured.
@@ -141,6 +142,6 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 - [x] PR2 — skill-side generation + critic (`references/proposal-guide.md`; SKILL.md + workflow.md wired to the proposal pipeline)
 - [x] PR3 — recombine refinement (`interaction_rationale` stored on recombine candidates, recombine-only validation; L4 reads it from the store and from proposals)
 - [x] PR4 — persisted `idea_sources` (`normalize_idea_source` lives in `hypotheses.py`; proposals reuse it; hypothesis-level sources join `source_set_hash` deduplicated; spec documented in `references/profile-schema.md`)
-- [ ] PR5 — Knowledge Pack storage + verification
+- [x] PR5 — Knowledge Pack storage + verification (`knowledge.py`, `pack-add` / `pack-verify`, `policy.knowledge_access` validation + dry-run display, registration enforced in `proposal-validate` and `hypothesis-add`, `tests/test_knowledge.py`)
 - [ ] PR6 — research surface
 - [ ] PR7 — agent-side paper/PR retrieval
