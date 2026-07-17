@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0–PR3 done. Next: PR4 (persisted `idea_sources`).
+Status: PR0–PR4 done. Next: PR5 (Knowledge Pack storage + verification).
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -89,7 +89,8 @@ Acceptance: pure functions, zero writes under `.research/`, deterministic output
 - Optional `interaction_rationale` field on recombine candidate specs, stored and surfaced.
 - No new hard eligibility blocks (consensus: falsified-alone sources may ground a *new* interaction hypothesis). L4 in `portfolio-lint` is the enforcement surface.
 
-### PR4 — Persisted external provenance (`idea_sources`)
+### PR4 — Persisted external provenance (`idea_sources`) — DONE
+Deviation from the original sketch: `handoff.md` renders no hypothesis section at all, so sources surface through `hypothesis-add` output and `hypothesis-list` (the stored record flows through); no ledger changes.
 - Optional `idea_sources` on hypothesis specs, validated in `hypotheses.py`: `source_type` ∈ {paper, pull_request, issue, user_note, repository_artifact}; non-empty `locator`; immutable `revision` and/or `content_sha256`; non-empty `claim` and `applicability`; `usage.mode` defaulting to `idea_only` with `code_reuse_allowed: false`; `license` field (may be `unknown`).
 - `origin_evidence` remains mandatory (principle 4). `hypothesis-list` and checkpoint/handoff rendering show source summaries.
 - Backward compatible with existing v2 stores.
@@ -139,7 +140,7 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 - [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; README install pin stays at `v0.3.0` until a `v0.4.0` release tag exists)
 - [x] PR2 — skill-side generation + critic (`references/proposal-guide.md`; SKILL.md + workflow.md wired to the proposal pipeline)
 - [x] PR3 — recombine refinement (`interaction_rationale` stored on recombine candidates, recombine-only validation; L4 reads it from the store and from proposals)
-- [ ] PR4 — persisted `idea_sources`
+- [x] PR4 — persisted `idea_sources` (`normalize_idea_source` lives in `hypotheses.py`; proposals reuse it; hypothesis-level sources join `source_set_hash` deduplicated; spec documented in `references/profile-schema.md`)
 - [ ] PR5 — Knowledge Pack storage + verification
 - [ ] PR6 — research surface
 - [ ] PR7 — agent-side paper/PR retrieval

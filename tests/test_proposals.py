@@ -168,6 +168,67 @@ def test_proposal_validate_accepts_rejects_and_writes_nothing(mock_repo: Path, t
     assert context["constraints"]["allowed_paths"]
 
 
+def test_hypothesis_add_persists_idea_sources(mock_repo: Path, tmp_path: Path) -> None:
+    approve_v2(mock_repo, write_profile(tmp_path, selector="diagnostic", transitions=[]))
+    record_baseline(mock_repo)
+    spec = {
+        "hypothesis_id": "h-gate",
+        "statement": "Gating the score reduces noise.",
+        "prediction": "The primary metric improves beyond noise tolerance.",
+        "falsification_criteria": "The metric does not improve beyond noise tolerance.",
+        "family": "gating",
+        "origin_evidence": [{"experiment_id": "baseline", "reason": "Baseline shows unstable scores."}],
+        "idea_sources": [paper_source()],
+    }
+    created = add_hypothesis(mock_repo, spec_path=write_yaml_spec(tmp_path, "h-gate.yaml", spec))
+    assert created["idea_sources"][0]["usage"] == {"mode": "idea_only", "code_reuse_allowed": False}
+    assert created["idea_sources"][0]["license"] == "unknown"
+    listed = list_hypotheses(mock_repo)["hypotheses"][0]["idea_sources"]
+    assert listed[0]["locator"] == "example-archive:2401.00001v2"
+
+    missing_hash = dict(spec, hypothesis_id="h-bad")
+    missing_hash["idea_sources"] = [{k: v for k, v in paper_source().items() if k != "content_sha256"}]
+    with pytest.raises(ResearchLoopError, match="revision or content_sha256"):
+        add_hypothesis(mock_repo, spec_path=write_yaml_spec(tmp_path, "h-bad.yaml", missing_hash))
+
+    code_reuse = dict(spec, hypothesis_id="h-bad2")
+    code_reuse["idea_sources"] = [
+        dict(paper_source(), usage={"mode": "idea_only", "code_reuse_allowed": True})
+    ]
+    with pytest.raises(ResearchLoopError, match="must remain false"):
+        add_hypothesis(mock_repo, spec_path=write_yaml_spec(tmp_path, "h-bad2.yaml", code_reuse))
+
+    proposal = {
+        "schema_version": 2,
+        "proposal_id": "round-sources",
+        "items": [
+            {
+                "slot": "explore",
+                "hypothesis": {
+                    "hypothesis_id": "h-pack",
+                    "statement": "Sequence packing raises throughput without hurting the metric.",
+                    "prediction": "The metric holds while runtime drops.",
+                    "falsification_criteria": "The metric regresses beyond noise tolerance.",
+                    "family": "packing",
+                    "origin_evidence": [
+                        {"experiment_id": "baseline", "reason": "Baseline runtime dominates."}
+                    ],
+                    "idea_sources": [paper_source()],
+                },
+                "candidate": candidate_spec(
+                    "explore-pack", hypothesis_id="h-pack", trace="explore", operator="draft", family="packing"
+                ),
+                "idea_sources": [paper_source()],
+            }
+        ],
+    }
+    result = validate_proposal(
+        mock_repo, spec_path=write_yaml_spec(tmp_path, "round-sources.yaml", proposal)
+    )
+    assert result["counts"]["accepted"] == 1
+    assert result["counts"]["idea_sources"] == 1
+
+
 def test_portfolio_lint_flags_and_clears_coverage_gaps(mock_repo: Path, tmp_path: Path) -> None:
     approve_v2(mock_repo, write_profile(tmp_path, selector="diagnostic", transitions=[]))
     record_baseline(mock_repo)

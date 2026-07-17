@@ -20,6 +20,39 @@ from .util import (
 RELATIONS = {"supports", "weakens", "falsifies", "inconclusive"}
 ASSESSMENTS = {"open", "supported", "contested", "falsified"}
 SOURCE_TYPES = {"primary_metric", "run_log", "artifact"}
+IDEA_SOURCE_TYPES = {"paper", "pull_request", "issue", "user_note", "repository_artifact"}
+
+
+def normalize_idea_source(value: Any, field: str) -> Dict[str, Any]:
+    if not isinstance(value, dict):
+        raise ResearchLoopError(f"{field} must be a mapping")
+    source_type = value.get("source_type")
+    if source_type not in IDEA_SOURCE_TYPES:
+        raise ResearchLoopError(f"{field}.source_type must be one of {sorted(IDEA_SOURCE_TYPES)}")
+    revision = str(value.get("revision", "") or "").strip()
+    content_sha256 = str(value.get("content_sha256", "") or "").strip()
+    if not revision and not content_sha256:
+        raise ResearchLoopError(f"{field} requires an immutable revision or content_sha256")
+    usage = value.get("usage", {})
+    if not isinstance(usage, dict):
+        raise ResearchLoopError(f"{field}.usage must be a mapping")
+    if usage.get("mode", "idea_only") != "idea_only":
+        raise ResearchLoopError(f"{field}.usage.mode supports only idea_only")
+    if bool(usage.get("code_reuse_allowed", False)):
+        raise ResearchLoopError(f"{field}.usage.code_reuse_allowed must remain false")
+    license_value = value.get("license", "unknown")
+    if not isinstance(license_value, str) or not license_value.strip():
+        raise ResearchLoopError(f"{field}.license must be a non-empty string")
+    return {
+        "source_type": source_type,
+        "locator": _nonempty(value.get("locator"), f"{field}.locator"),
+        "revision": revision,
+        "content_sha256": content_sha256,
+        "claim": _nonempty(value.get("claim"), f"{field}.claim"),
+        "applicability": _nonempty(value.get("applicability"), f"{field}.applicability"),
+        "usage": {"mode": "idea_only", "code_reuse_allowed": False},
+        "license": license_value.strip(),
+    }
 
 
 def _store_path(repo: Path, campaign: Optional[str]) -> Path:
@@ -109,6 +142,12 @@ def add_hypothesis(repo: Path, *, spec_path: Path, campaign: Optional[str] = Non
                 "reason": _nonempty(item.get("reason"), f"origin_evidence[{index}].reason"),
             }
         )
+    sources = spec.get("idea_sources", [])
+    if not isinstance(sources, list):
+        raise ResearchLoopError("idea_sources must be a list")
+    normalized_sources = [
+        normalize_idea_source(item, f"idea_sources[{index}]") for index, item in enumerate(sources)
+    ]
     timestamp = now_iso()
     hypothesis = {
         "hypothesis_id": hypothesis_id,
@@ -117,6 +156,7 @@ def add_hypothesis(repo: Path, *, spec_path: Path, campaign: Optional[str] = Non
         "falsification_criteria": _nonempty(spec.get("falsification_criteria"), "falsification_criteria"),
         "family": validate_slug(str(spec.get("family", "")), "family"),
         "origin_evidence": normalized_origin,
+        "idea_sources": normalized_sources,
         "assessment": "open",
         "evidence_count": 0,
         "created_at": timestamp,

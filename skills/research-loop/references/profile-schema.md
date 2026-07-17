@@ -92,7 +92,16 @@ family: candidate-pool
 origin_evidence:
   - experiment_id: baseline
     reason: "Authoritative baseline error analysis"
+idea_sources:                     # optional external idea provenance; ideas only, never code
+  - source_type: paper            # paper | pull_request | issue | user_note | repository_artifact
+    locator: "archive:2401.00001v2"
+    content_sha256: "..."         # immutable revision and/or content_sha256 required
+    claim: "A lightweight gate stabilizes outputs."
+    applicability: "This project exposes a comparable scoring path."
+    license: unknown
 ```
+
+`origin_evidence` stays mandatory: external sources explain where an idea came from; recorded local evidence explains why it is worth testing here.
 
 ## Candidate specification
 

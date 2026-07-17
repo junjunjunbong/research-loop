@@ -10,13 +10,12 @@ from .state import load_profile, read_ledger
 from .util import canonical_hash, read_yaml
 
 from .candidates import _normalize_candidate, champion_row, list_candidates
-from .hypotheses import list_hypotheses
+from .hypotheses import list_hypotheses, normalize_idea_source
 from .strategy import read_strategy_state, selector_definition
 
 
 SLOTS = {"diagnose", "exploit", "explore", "recombine", "constraint"}
 SLOT_TRACES = {"diagnose": "diagnose", "exploit": "exploit", "explore": "explore"}
-IDEA_SOURCE_TYPES = {"paper", "pull_request", "issue", "user_note", "repository_artifact"}
 
 
 def _require_v2(repo: Path, campaign: Optional[str]) -> Dict[str, Any]:
@@ -30,38 +29,6 @@ def _require_text(value: Any, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ResearchLoopError(f"{field} must be a non-empty string")
     return value.strip()
-
-
-def _normalize_idea_source(value: Any, field: str) -> Dict[str, Any]:
-    if not isinstance(value, dict):
-        raise ResearchLoopError(f"{field} must be a mapping")
-    source_type = value.get("source_type")
-    if source_type not in IDEA_SOURCE_TYPES:
-        raise ResearchLoopError(f"{field}.source_type must be one of {sorted(IDEA_SOURCE_TYPES)}")
-    revision = str(value.get("revision", "") or "").strip()
-    content_sha256 = str(value.get("content_sha256", "") or "").strip()
-    if not revision and not content_sha256:
-        raise ResearchLoopError(f"{field} requires an immutable revision or content_sha256")
-    usage = value.get("usage", {})
-    if not isinstance(usage, dict):
-        raise ResearchLoopError(f"{field}.usage must be a mapping")
-    if usage.get("mode", "idea_only") != "idea_only":
-        raise ResearchLoopError(f"{field}.usage.mode supports only idea_only")
-    if bool(usage.get("code_reuse_allowed", False)):
-        raise ResearchLoopError(f"{field}.usage.code_reuse_allowed must remain false")
-    license_value = value.get("license", "unknown")
-    if not isinstance(license_value, str) or not license_value.strip():
-        raise ResearchLoopError(f"{field}.license must be a non-empty string")
-    return {
-        "source_type": source_type,
-        "locator": _require_text(value.get("locator"), f"{field}.locator"),
-        "revision": revision,
-        "content_sha256": content_sha256,
-        "claim": _require_text(value.get("claim"), f"{field}.claim"),
-        "applicability": _require_text(value.get("applicability"), f"{field}.applicability"),
-        "usage": {"mode": "idea_only", "code_reuse_allowed": False},
-        "license": license_value.strip(),
-    }
 
 
 def _normalize_intervention(value: Any, field: str) -> Dict[str, Any]:
@@ -109,6 +76,9 @@ def _normalize_proposed_hypothesis(
                 "reason": _require_text(item.get("reason"), f"{field}.origin_evidence[{index}].reason"),
             }
         )
+    sources = value.get("idea_sources", [])
+    if not isinstance(sources, list):
+        raise ResearchLoopError(f"{field}.idea_sources must be a list")
     return {
         "hypothesis_id": hypothesis_id,
         "statement": _require_text(value.get("statement"), f"{field}.statement"),
@@ -118,6 +88,10 @@ def _normalize_proposed_hypothesis(
         ),
         "family": validate_slug(str(value.get("family", "")), f"{field}.family"),
         "origin_evidence": normalized_origin,
+        "idea_sources": [
+            normalize_idea_source(source, f"{field}.idea_sources[{index}]")
+            for index, source in enumerate(sources)
+        ],
     }
 
 
@@ -175,7 +149,7 @@ def _normalize_item(
     if not isinstance(sources, list):
         raise ResearchLoopError(f"{field}.idea_sources must be a list")
     normalized["idea_sources"] = [
-        _normalize_idea_source(source, f"{field}.idea_sources[{index}]")
+        normalize_idea_source(source, f"{field}.idea_sources[{index}]")
         for index, source in enumerate(sources)
     ]
     return normalized
@@ -311,19 +285,18 @@ def validate_proposal(repo: Path, *, spec_path: Path, campaign: Optional[str] = 
             proposed_hypothesis_ids.add(normalized["hypothesis"]["hypothesis_id"])
         proposed_candidate_ids.add(normalized["candidate"]["candidate_id"])
         accepted.append(normalized)
-    source_identities = sorted(
-        (
-            {
+    identity_by_hash: Dict[str, Dict[str, str]] = {}
+    for item in accepted:
+        hypothesis_sources = item.get("hypothesis", {}).get("idea_sources", [])
+        for source in item["idea_sources"] + hypothesis_sources:
+            identity = {
                 "source_type": source["source_type"],
                 "locator": source["locator"],
                 "revision": source["revision"],
                 "content_sha256": source["content_sha256"],
             }
-            for item in accepted
-            for source in item["idea_sources"]
-        ),
-        key=lambda entry: canonical_hash(entry),
-    )
+            identity_by_hash[canonical_hash(identity)] = identity
+    source_identities = [identity_by_hash[key] for key in sorted(identity_by_hash)]
     return {
         "schema_version": 2,
         "proposal_id": proposal_id,
