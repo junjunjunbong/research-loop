@@ -1,6 +1,6 @@
 {
   "name": "research-loop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Turn an existing Git research project and a user goal into an approved, strategy-guided experiment campaign.",
   "author": {
     "name": "Research Loop contributors"

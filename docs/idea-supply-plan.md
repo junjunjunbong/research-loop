@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0 in progress (this document plus ADR 0004 and the threat model are its deliverables).
+Status: PR0 done (commit `8fb4184`); PR1 done (proposals module, CLI, tests, version 0.4.0). Next: PR2.
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -42,11 +42,11 @@ Probabilistic debugging (`debug_prob`), pure greedy best-node search, LLM-parsed
 
 ## PR sequence
 
-### PR0 — ADR + threat model (docs only) — IN PROGRESS
+### PR0 — ADR + threat model (docs only) — DONE (`8fb4184`)
 Deliverables: this plan, `docs/adr/0004-agent-side-idea-supply.md`, `docs/threat-model-external-knowledge.md`.
 Acceptance: no behavior change; consistent with `CONTEXT.md` language.
 
-### PR1 — Stateless proposal contract (runner)
+### PR1 — Stateless proposal contract (runner) — DONE
 New module `src/research_loop/proposals.py` + CLI wiring. Version bump to 0.4.0 (update README install pin per house practice).
 
 - `proposal-validate --spec <file>`: validates a proposal file (shape below), cross-checks parents/hypotheses against the ledger and stores, stamps `context_hash` and `source_set_hash` via `canonical_hash`, returns normalized items plus per-item rejection reasons. **Writes nothing.**
@@ -127,8 +127,8 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 4. Runner-changing PRs bump the minor version and rebuild `dist/` per house practice; check the README install pin.
 5. Do not fold multiple PRs into one commit; the sequence is the audit trail.
 
-- [ ] PR0 — ADR + threat model (docs in working tree; awaiting commit)
-- [ ] PR1 — stateless proposal contract
+- [x] PR0 — ADR + threat model (commit `8fb4184`)
+- [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; README install pin stays at `v0.3.0` until a `v0.4.0` release tag exists)
 - [ ] PR2 — skill-side generation + critic
 - [ ] PR3 — recombine refinement
 - [ ] PR4 — persisted `idea_sources`

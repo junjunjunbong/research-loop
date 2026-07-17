@@ -15,6 +15,7 @@ from .inspector import inspect_project
 from .ledger import campaign_status, checkpoint, record_experiment
 from .metrics import evaluate_experiment
 from .planning import approve_plan, save_plan
+from .proposals import portfolio_lint, proposal_context, validate_proposal
 from .state import (
     activate_campaign,
     list_campaigns,
@@ -34,7 +35,7 @@ def _repo_parser(subparsers: argparse._SubParsersAction, name: str, help_text: s
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-loop")
-    parser.add_argument("--version", action="version", version="research-loop 0.3.0")
+    parser.add_argument("--version", action="version", version="research-loop 0.4.0")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _repo_parser(subparsers, "inspect", "Inspect project evidence without changing it")
@@ -80,6 +81,16 @@ def build_parser() -> argparse.ArgumentParser:
     evidence.add_argument("--operator")
     evidence.add_argument("--parent-id")
     evidence.add_argument("--source-parent-id", action="append", dest="source_parent_ids")
+
+    proposal_validate = _repo_parser(
+        subparsers, "proposal-validate", "Validate a stateless hypothesis/candidate proposal file"
+    )
+    proposal_validate.add_argument("--spec", type=Path, required=True)
+    lint = _repo_parser(
+        subparsers, "portfolio-lint", "Report computable coverage warnings for the candidate pool"
+    )
+    lint.add_argument("--spec", type=Path, help="Optional proposal file to lint together with pending candidates")
+    _repo_parser(subparsers, "proposal-context", "Render the deterministic hypothesis-generation context")
 
     execute = _repo_parser(subparsers, "execute", "Execute an approved smoke or full command")
     execute.add_argument("--id", required=True, dest="experiment_id")
@@ -130,6 +141,12 @@ def dispatch(args: argparse.Namespace) -> Dict[str, Any]:
         return list_hypotheses(repo, args.campaign)
     if args.command == "hypothesis-evidence-add":
         return add_hypothesis_evidence(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "proposal-validate":
+        return validate_proposal(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "portfolio-lint":
+        return portfolio_lint(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "proposal-context":
+        return proposal_context(repo, args.campaign)
     if args.command == "evidence":
         return scoped_evidence(
             repo,
