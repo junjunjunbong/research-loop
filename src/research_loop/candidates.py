@@ -120,6 +120,12 @@ def _normalize_candidate(spec: Dict[str, Any], version: int) -> Dict[str, Any]:
         raise ResearchLoopError("evidence must be a non-empty list of mappings")
     if not isinstance(estimated_cost, int) or not 1 <= estimated_cost <= 3:
         raise ResearchLoopError("estimated_cost must be an integer from 1 to 3")
+    interaction_rationale = spec.get("interaction_rationale")
+    if interaction_rationale is not None:
+        if operator != "recombine":
+            raise ResearchLoopError("interaction_rationale applies only to recombine candidates")
+        if not isinstance(interaction_rationale, str) or not interaction_rationale.strip():
+            raise ResearchLoopError("interaction_rationale must be a non-empty string")
     scores = spec.get("scores")
     if not isinstance(scores, dict):
         raise ResearchLoopError("scores must be a mapping")
@@ -140,6 +146,8 @@ def _normalize_candidate(spec: Dict[str, Any], version: int) -> Dict[str, Any]:
         "status": "pending",
         "created_at": now_iso(),
     }
+    if interaction_rationale is not None:
+        candidate["interaction_rationale"] = interaction_rationale.strip()
     if version == 1:
         candidate["priority"] = round(priority, 12)
     return candidate

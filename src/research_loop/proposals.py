@@ -168,10 +168,6 @@ def _normalize_item(
         raise ResearchLoopError(f"slot {slot} requires trace {expected_trace}")
     if slot == "recombine" and candidate["operator"] != "recombine":
         raise ResearchLoopError("slot recombine requires the recombine operator")
-    if "interaction_rationale" in candidate_spec:
-        candidate["interaction_rationale"] = _require_text(
-            candidate_spec.get("interaction_rationale"), f"{field}.candidate.interaction_rationale"
-        )
     normalized["candidate"] = candidate
     if "intervention" in item:
         normalized["intervention"] = _normalize_intervention(item["intervention"], f"{field}.intervention")

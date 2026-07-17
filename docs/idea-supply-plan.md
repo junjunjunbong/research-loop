@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0–PR2 done. Next: PR3 (recombine refinement).
+Status: PR0–PR3 done. Next: PR4 (persisted `idea_sources`).
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -85,7 +85,7 @@ Acceptance: pure functions, zero writes under `.research/`, deterministic output
 - New `references/proposal-guide.md`: slot definitions, critic checklist (falsifiable? duplicate? scope-valid? reward-hacking risk? one causal factor?), and the rule that `constraint` maps onto existing operators/traces (`debug` for invalid parents, `improve`/`exploit` or `explore` otherwise) — no new trace.
 - No runner changes.
 
-### PR3 — Recombine refinement (small runner change)
+### PR3 — Recombine refinement (small runner change) — DONE
 - Optional `interaction_rationale` field on recombine candidate specs, stored and surfaced.
 - No new hard eligibility blocks (consensus: falsified-alone sources may ground a *new* interaction hypothesis). L4 in `portfolio-lint` is the enforcement surface.
 
@@ -132,13 +132,13 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 1. Read this file, then `git log --oneline -5` and `git status`.
 2. Run `uv run pytest -q` and confirm the baseline is green before starting a PR. The suite exercises real git worktrees and subprocesses and takes several minutes; do not kill it at the first two-minute mark.
 3. Pick the first unchecked PR above, implement within its stated boundary (runner vs skill), add tests, update this file's status line and check the box.
-4. Runner-changing PRs bump the minor version and rebuild `dist/` per house practice; check the README install pin.
+4. Versions track releases, not PRs: the first runner-changing PR after a release tag bumps the minor version; later PRs before the next tag share it (PR1 and PR3 both ship as 0.4.0). Rebuild `dist/` after runner changes; update the README install pin only when the user tags the release.
 5. Do not fold multiple PRs into one commit; the sequence is the audit trail.
 
 - [x] PR0 — ADR + threat model (commit `8fb4184`)
 - [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; README install pin stays at `v0.3.0` until a `v0.4.0` release tag exists)
 - [x] PR2 — skill-side generation + critic (`references/proposal-guide.md`; SKILL.md + workflow.md wired to the proposal pipeline)
-- [ ] PR3 — recombine refinement
+- [x] PR3 — recombine refinement (`interaction_rationale` stored on recombine candidates, recombine-only validation; L4 reads it from the store and from proposals)
 - [ ] PR4 — persisted `idea_sources`
 - [ ] PR5 — Knowledge Pack storage + verification
 - [ ] PR6 — research surface

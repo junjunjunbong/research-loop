@@ -6,7 +6,7 @@ import pytest
 import yaml
 
 from conftest import commit_config
-from research_loop.candidates import add_candidate, list_candidates
+from research_loop.candidates import add_candidate, get_candidate, list_candidates
 from research_loop.errors import ResearchLoopError
 from research_loop.executor import execute_experiment
 from research_loop.experiments import prepare_experiment
@@ -306,3 +306,24 @@ def test_portfolio_lint_flags_falsified_recombine_source(mock_repo: Path, tmp_pa
         warning["rule"] != "L4-falsified-source-recombine"
         for warning in cleared["portfolio_health"]["warnings"]
     )
+
+    add_hypothesis(
+        mock_repo, spec_path=write_yaml_spec(tmp_path, "h-combo.yaml", recombine_item["hypothesis"])
+    )
+    add_candidate(
+        mock_repo, spec_path=write_yaml_spec(tmp_path, "combo.yaml", recombine_item["candidate"])
+    )
+    assert get_candidate(mock_repo, "combo")["interaction_rationale"].startswith("The pool change")
+    stored = portfolio_lint(mock_repo)
+    assert stored["pool"] == {"pending": 1, "proposed": 0}
+    assert all(
+        warning["rule"] != "L4-falsified-source-recombine"
+        for warning in stored["portfolio_health"]["warnings"]
+    )
+
+    bad = candidate_spec(
+        "bad-rationale", hypothesis_id="h-combo", trace="exploit", operator="improve", family="interaction"
+    )
+    bad["interaction_rationale"] = "not a recombine candidate"
+    with pytest.raises(ResearchLoopError, match="applies only to recombine"):
+        add_candidate(mock_repo, spec_path=write_yaml_spec(tmp_path, "bad-rationale.yaml", bad))
