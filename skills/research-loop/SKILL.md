@@ -63,12 +63,13 @@ Update the checkpoint after setup, approval, experiment preparation, before and 
 
 ## Safety
 
-Follow `references/safety.md`. v0.3 permits only local `light` or `local_cpu` argv execution without a shell. GPU, remote, paid, Slurm, SSH, Kubernetes, destructive Git, dataset mutation outside approved paths, and automatic merge are out of scope.
+Follow `references/safety.md`. v0.3 permits only local `light` or `local_cpu` argv execution without a shell. GPU, remote, paid, Slurm, SSH, Kubernetes, destructive Git, dataset mutation outside approved paths, and automatic merge are out of scope. Network use is agent-side retrieval only, behind an approved `knowledge_access` policy per `references/retrieval-guide.md`; the runner never fetches.
 
 ## References
 
 - `references/profile-schema.md` — generated Research Profile contract.
 - `references/proposal-guide.md` — slot-diverse proposal generation and the critic checklist.
+- `references/retrieval-guide.md` — approved agent-side paper/PR retrieval into the Knowledge Pack.
 - `references/workflow.md` — exact setup, baseline, experiment, and recovery flow.
 - `references/decision-policy.md` — result validity and status meanings.
 - `references/safety.md` — approval, Git, resource, path, and credential boundaries.

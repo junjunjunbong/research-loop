@@ -169,6 +169,42 @@ def test_sources_must_be_registered_when_pack_enabled(mock_repo: Path, tmp_path:
     assert "not registered in the knowledge pack" in result["rejected"][0]["reasons"][0]
 
 
+def test_snapshot_verification(mock_repo: Path, tmp_path: Path) -> None:
+    import hashlib
+
+    approve_v2(
+        mock_repo,
+        write_pack_profile(
+            tmp_path,
+            {"mode": "agent_retrieval", "allow_network": True, "allowed_source_types": ["paper"]},
+        ),
+    )
+    raw = b"raw fetched paper text"
+    digest = hashlib.sha256(raw).hexdigest()
+    add_pack_record(
+        mock_repo,
+        spec_path=write_yaml_spec(
+            tmp_path, "snap.yaml", record_spec("snap-paper", content_sha256=digest)
+        ),
+    )
+    snapshots = campaign_dir(mock_repo) / "knowledge" / "snapshots"
+    snapshots.mkdir(parents=True)
+    snapshot = snapshots / "snap-paper.html"
+    snapshot.write_bytes(raw)
+    report = verify_pack(mock_repo)
+    assert report["mode"] == "agent_retrieval"
+    assert report["snapshots"] == 1
+
+    snapshot.write_bytes(raw + b" tampered")
+    with pytest.raises(ResearchLoopError, match="snapshot hash mismatch"):
+        verify_pack(mock_repo)
+    snapshot.write_bytes(raw)
+
+    (snapshots / "orphan.html").write_bytes(b"unmatched")
+    with pytest.raises(ResearchLoopError, match="no matching record"):
+        verify_pack(mock_repo)
+
+
 def test_research_surface_validation_and_display(mock_repo: Path, tmp_path: Path) -> None:
     surface = {
         "editable_components": [

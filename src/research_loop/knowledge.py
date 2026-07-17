@@ -15,6 +15,7 @@ from .util import canonical_hash, now_iso, read_json, read_yaml, write_json
 
 PACK_DIRNAME = "knowledge"
 RECORDS_DIRNAME = "records"
+SNAPSHOTS_DIRNAME = "snapshots"
 SUMS_FILENAME = "SHA256SUMS"
 DEFAULT_MAX_SOURCES_PER_ROUND = 20
 DEFAULT_MAX_RECORD_BYTES = 16384
@@ -154,10 +155,34 @@ def verify_pack(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
         if relative != expected_name:
             raise ResearchLoopError(f"knowledge pack record name mismatch: {relative}")
         records.append(record)
+    snapshots_dir = pack / SNAPSHOTS_DIRNAME
+    snapshots = sorted(path for path in snapshots_dir.iterdir() if path.is_file()) if snapshots_dir.is_dir() else []
+    by_source: Dict[str, List[Path]] = {}
+    source_ids = {record["source_id"] for record in records}
+    for snapshot in snapshots:
+        stem = snapshot.name if snapshot.name in source_ids else snapshot.stem
+        if stem not in source_ids:
+            raise ResearchLoopError(f"knowledge pack snapshot has no matching record: {snapshot.name}")
+        by_source.setdefault(stem, []).append(snapshot)
+    for record in records:
+        matches = by_source.get(record["source_id"], [])
+        if len(matches) > 1:
+            raise ResearchLoopError(
+                f"knowledge pack has multiple snapshots for one source: {record['source_id']}"
+            )
+        for snapshot in matches:
+            if not record["content_sha256"]:
+                raise ResearchLoopError(
+                    f"snapshot exists but the record has no content_sha256: {record['source_id']}"
+                )
+            digest = hashlib.sha256(snapshot.read_bytes()).hexdigest()
+            if digest != record["content_sha256"]:
+                raise ResearchLoopError(f"knowledge pack snapshot hash mismatch: {snapshot.name}")
     return {
         "mode": access["mode"],
         "allow_network": access["allow_network"],
         "records": len(records),
+        "snapshots": len(snapshots),
         "source_ids": [record["source_id"] for record in records],
         "verified": True,
     }
