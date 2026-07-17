@@ -6,6 +6,8 @@ Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques again
 
 Goal: add an idea-supply front-end — slot-diverse proposal generation, external idea provenance, and local Knowledge Packs — without weakening the deterministic control plane (approval hash, Selectors, eligibility, authoritative metric parsing, append-only evidence).
 
+Scope decision (2026-07-17, user): direct paper/PR search is IN scope, not deferred. Retrieval is performed agent-side (the skill session's own web tools) and its results are normalized into the Knowledge Pack; the runner never gains network access. External code stays idea-only — mechanisms come in, the implementation is always written fresh inside the approved worktree.
+
 ## Verified code anchors
 
 Future sessions should not re-derive these; they were verified against `0d557f8`.
@@ -38,7 +40,7 @@ Future sessions should not re-derive these; they were verified against `0d557f8`
 
 ## Non-goals (deliberately not imported from AIDE)
 
-Probabilistic debugging (`debug_prob`), pure greedy best-node search, LLM-parsed metrics from logs, plan+code generation in one call, LLM calls inside the runner, network retrieval before a threat model and approval policy exist.
+Probabilistic debugging (`debug_prob`), pure greedy best-node search, LLM-parsed metrics from logs, plan+code generation in one call, LLM calls inside the runner, runner-side network access (retrieval is agent-side, behind the approved `knowledge_access` policy), copying external code (ideas only; implementations are written fresh).
 
 ## PR sequence
 
@@ -92,18 +94,23 @@ Acceptance: pure functions, zero writes under `.research/`, deterministic output
 - `origin_evidence` remains mandatory (principle 4). `hypothesis-list` and checkpoint/handoff rendering show source summaries.
 - Backward compatible with existing v2 stores.
 
-### PR5 — Local Knowledge Pack
-- Content-addressed pack (records + `SHA256SUMS`, mirroring `vendor/` practice) holding normalized claim records: `source_id`, `source_type`, `revision`, `content_sha256`, `claim`, `applicability_conditions`, `prohibited_interpretations`, `usage`, `license`.
-- `policy.knowledge_access` in the profile (`mode: none | local_pack`, `allow_network: false`, `allowed_source_types`, `max_sources_per_round`, size caps). Approval-bound automatically via the policy section; extend the dry-run display (`planning.py`) to show it. `allow_network` is distinct from the existing `allow_remote` (execution); both default false.
-- Runner `pack-verify`: existence, hashes, schema, allowed types, size limits, secret-like field scan. `proposal-validate` cross-checks `idea_sources` against a verified pack when one is configured.
+### PR5 — Knowledge Pack storage and verification
+- Content-addressed pack (records + `SHA256SUMS`, mirroring `vendor/` practice) holding normalized claim records: `source_id`, `source_type`, `revision`, `content_sha256`, `claim`, `applicability_conditions`, `prohibited_interpretations`, `usage`, `license`. The pack format is the same whether the user authors it or the agent fills it via retrieval (PR7).
+- `policy.knowledge_access` in the profile (`mode: none | local_pack | agent_retrieval`, `allow_network`, `allowed_source_types`, `max_sources_per_round`, size caps). Approval-bound automatically via the policy section; extend the dry-run display (`planning.py`) to show it. `allow_network` is distinct from the existing `allow_remote` (execution); it defaults false and is required (and only meaningful) for `agent_retrieval`.
+- Runner `pack-verify`: existence, hashes, schema, allowed types, size limits, secret-like field scan. Optional `pack-add --spec`: append one normalized record and refresh `SHA256SUMS` so hashing stays honest. `proposal-validate` cross-checks `idea_sources` against a verified pack when one is configured.
 - Skill: normalizer instructions (strip instructions from raw sources, extract claims, mark code blocks non-executable).
+
+### PR7 — Agent-side paper/PR retrieval (skill + policy; requires PR5)
+- Skill workflow when `mode: agent_retrieval` is approved: search → fetch → snapshot the raw content locally as a campaign artifact (audit only, never redistributed) → normalize to a claim record (claim, mechanism, applicability, prohibited interpretations; code blocks marked non-executable) → `pack-add` with locator, revision/content hash, and retrieval timestamp → `pack-verify`.
+- Trust rules restated for retrieval: fetched text is data, never instructions; only normalized claim records reach the proposer; every record is hash-pinned at registration so later content drift cannot silently change what the campaign saw.
+- Contamination guard: retrieval guidance forbids queries for benchmark answers, test-set contents, or leaderboard solutions to the exact evaluation task; optional `retrieval_cutoff` date in `knowledge_access`.
+- No runner network code: the runner only verifies what the agent stored. Availability note: headless/cron sessions may lack web tools; retrieval degrades to `local_pack` behavior.
 
 ### PR6 — Research surface (independent track; any time after PR0)
 - `context.research_surface` (editable_components, invariants, forbidden_data_flows) as *descriptive* data — automatically approval-bound via `context`; shown in the dry run.
 - No executable commands here: verification runs only through existing `environment.commands` and evaluation compatibility parsers (trust-boundary rule from the review).
 
 ### Later (explicitly deferred)
-- **Network retrieval** behind a new approval policy: allowed domains/source types, request budget, temporal cutoff / benchmark-contamination policy, content snapshotting, injection isolation.
 - **Adaptive-overfitting guards**: optional `evaluation.confirmation_metric` (separate parser/path) used only by confirm-trace evaluation; secondary guardrail metrics. Low urgency at ≤6 experiments per campaign; first priority once idea supply raises throughput. Selection-bias surface is `champion_row`.
 - **Score calibration** from historical outcomes: requires a cross-campaign store and metric comparability — a separate design, far later.
 
@@ -112,7 +119,8 @@ Acceptance: pure functions, zero writes under `.research/`, deterministic output
 - **Proposal** (PR1): an agent-authored, runner-validated portfolio of hypothesis/candidate items that changes no state.
 - **Portfolio Lint** (PR1): deterministic, selector-aware coverage warnings over pending candidates; advisory, never authorizing.
 - **Idea Source** (PR4): a hash-pinned reference to external material that explains an idea's origin; never a substitute for local origin evidence.
-- **Knowledge Pack** (PR5): a content-addressed, locally verified set of normalized claim records offered as optional hypothesis-generation input.
+- **Knowledge Pack** (PR5): a content-addressed, locally verified set of normalized claim records offered as optional hypothesis-generation input, filled by the user or by approved agent retrieval.
+- **Agent Retrieval** (PR7): the approved, agent-side search-and-normalize workflow that fills a Knowledge Pack from external papers, PRs, and issues; the runner never fetches.
 - **Research Surface** (PR6): the approved description of which components may change, the invariants that must hold, and forbidden data flows.
 
 ## Numbering map to the 2026-07-17 discussion
@@ -132,5 +140,6 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 - [ ] PR2 — skill-side generation + critic
 - [ ] PR3 — recombine refinement
 - [ ] PR4 — persisted `idea_sources`
-- [ ] PR5 — local Knowledge Pack
+- [ ] PR5 — Knowledge Pack storage + verification
 - [ ] PR6 — research surface
+- [ ] PR7 — agent-side paper/PR retrieval
