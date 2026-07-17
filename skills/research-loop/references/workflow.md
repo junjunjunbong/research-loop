@@ -27,8 +27,12 @@ research-loop record --repo "$TARGET_REPO" --id baseline
 ## Evidence, candidates, and experiment
 
 ```bash
-research-loop hypothesis-add --repo "$TARGET_REPO" --spec /tmp/hypothesis.yaml
+research-loop proposal-context --repo "$TARGET_REPO"
 research-loop evidence --repo "$TARGET_REPO" --operator improve --parent-id baseline
+# author /tmp/proposal.yaml per references/proposal-guide.md
+research-loop proposal-validate --repo "$TARGET_REPO" --spec /tmp/proposal.yaml
+research-loop portfolio-lint --repo "$TARGET_REPO" --spec /tmp/proposal.yaml
+research-loop hypothesis-add --repo "$TARGET_REPO" --spec /tmp/hypothesis.yaml
 research-loop candidate-add --repo "$TARGET_REPO" --spec /tmp/candidate.yaml
 research-loop candidate-rank --repo "$TARGET_REPO"
 research-loop prepare --repo "$TARGET_REPO" --id <experiment-id> --candidate-id <recommended-candidate-id>
@@ -45,7 +49,7 @@ research-loop hypothesis-evidence-add --repo "$TARGET_REPO" --spec /tmp/hypothes
 research-loop status --repo "$TARGET_REPO"
 ```
 
-For schema v2, register hypotheses only from recorded origin evidence. After every recorded experiment, add explicit Hypothesis Evidence before forming the next candidate set. `record` applies at most one pre-approved Strategy transition; `candidate-rank` and `status` only read the resulting state.
+For schema v2, register hypotheses only from recorded origin evidence. After every recorded experiment, add explicit Hypothesis Evidence before forming the next candidate set. Form that set as one validated proposal: register only items accepted by `proposal-validate`, and address `portfolio-lint` warnings or record the justification in the checkpoint. `record` applies at most one pre-approved Strategy transition; `candidate-rank` and `status` only read the resulting state.
 
 A confirmation uses a new experiment/candidate ID, the `confirm` operator, and the champion as primary parent. The runner creates an empty commit so the Git tree stays identical. `keep` is available only after the configured number of compatible full runs with the same Git tree hash.
 

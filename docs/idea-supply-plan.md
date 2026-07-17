@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0 done (commit `8fb4184`); PR1 done (proposals module, CLI, tests, version 0.4.0). Next: PR2.
+Status: PR0–PR2 done. Next: PR3 (recombine refinement).
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -80,7 +80,7 @@ items:
 
 Acceptance: pure functions, zero writes under `.research/`, deterministic output, tests for schema rejection + each lint rule (`tests/test_proposals.py`).
 
-### PR2 — Skill-side portfolio generation + critic (docs/skill only)
+### PR2 — Skill-side portfolio generation + critic (docs/skill only) — DONE
 - `SKILL.md` + `references/workflow.md`: generate per-slot (1 diagnose, 2 exploit, 1 explore, 1 recombine when eligible, 1 constraint-aware), run the critic checklist, then `proposal-validate` + `portfolio-lint`, show the dry run to the user, and only then `hypothesis-add`/`candidate-add`.
 - New `references/proposal-guide.md`: slot definitions, critic checklist (falsifiable? duplicate? scope-valid? reward-hacking risk? one causal factor?), and the rule that `constraint` maps onto existing operators/traces (`debug` for invalid parents, `improve`/`exploit` or `explore` otherwise) — no new trace.
 - No runner changes.
@@ -137,7 +137,7 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 
 - [x] PR0 — ADR + threat model (commit `8fb4184`)
 - [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; README install pin stays at `v0.3.0` until a `v0.4.0` release tag exists)
-- [ ] PR2 — skill-side generation + critic
+- [x] PR2 — skill-side generation + critic (`references/proposal-guide.md`; SKILL.md + workflow.md wired to the proposal pipeline)
 - [ ] PR3 — recombine refinement
 - [ ] PR4 — persisted `idea_sources`
 - [ ] PR5 — Knowledge Pack storage + verification

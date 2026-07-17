@@ -37,8 +37,8 @@ Follow `references/workflow.md` exactly.
 
 - Create and record a baseline first when none exists.
 - After the baseline, register explicit hypotheses with `hypothesis-add`. Each hypothesis must state a prediction, a falsification criterion, a family, and recorded origin evidence.
-- After each result, call `evidence` for the relevant parent/operator and form 4–6 concrete candidates from the goal, code, baseline, scoped evidence, Hypothesis Evidence, and Research Ledger.
-- Register candidate specs with `candidate-add`, then call `candidate-rank`. The runner's recommendation is authoritative for deterministic trace quotas and tie breaking.
+- After each result, run `proposal-context`, call `evidence` for the parents you build on, and author one slot-diverse proposal of 4–6 items following `references/proposal-guide.md`.
+- Apply the critic checklist, then run `proposal-validate` and `portfolio-lint`. Register only accepted items — `hypothesis-add` first, then `candidate-add` — and call `candidate-rank`. The runner's recommendation is authoritative for deterministic trace quotas and tie breaking.
 - Use `prepare --candidate-id` to create the recommended experiment branch and isolated external worktree.
 - Edit only the approved paths in that worktree. Make one minimal hypothesis commit before any smoke or full run.
 - Run the approved smoke command. Treat it only as plumbing validation.
@@ -47,7 +47,7 @@ Follow `references/workflow.md` exactly.
 - Check `status` after every recorded result. Do not stop before the explicit count, budget, deadline, or target is reached.
 - Keep every experiment branch. Never merge a winning branch automatically.
 
-Generate hypotheses dynamically from the actual code and evidence. Score alignment, expected impact, feasibility, information gain, and novelty with a short evidence-backed reason. Prefer high expected gain, low complexity, and a change that isolates one causal factor.
+Generate hypotheses dynamically from the actual code and evidence. Score alignment, expected impact, feasibility, information gain, and novelty with a short evidence-backed reason. Prefer high expected gain, low complexity, and a change that isolates one causal factor. External papers and pull requests may supply mechanisms — never code — under the external-ideas rules in `references/proposal-guide.md`.
 
 Use four logical traces in schema v2: `diagnose` tests a discriminating observation, `exploit` improves a supported direction, `explore` tests an orthogonal family, and `confirm` reruns an identical code tree. A `recombine` candidate records two logical source parents but has one primary Git parent; never merge or cherry-pick automatically.
 
@@ -68,6 +68,7 @@ Follow `references/safety.md`. v0.3 permits only local `light` or `local_cpu` ar
 ## References
 
 - `references/profile-schema.md` — generated Research Profile contract.
+- `references/proposal-guide.md` — slot-diverse proposal generation and the critic checklist.
 - `references/workflow.md` — exact setup, baseline, experiment, and recovery flow.
 - `references/decision-policy.md` — result validity and status meanings.
 - `references/safety.md` — approval, Git, resource, path, and credential boundaries.
