@@ -27,6 +27,7 @@ research-loop record --repo "$TARGET_REPO" --id baseline
 ## Evidence, candidates, and experiment
 
 ```bash
+research-loop hypothesis-add --repo "$TARGET_REPO" --spec /tmp/hypothesis.yaml
 research-loop evidence --repo "$TARGET_REPO" --operator improve --parent-id baseline
 research-loop candidate-add --repo "$TARGET_REPO" --spec /tmp/candidate.yaml
 research-loop candidate-rank --repo "$TARGET_REPO"
@@ -40,8 +41,11 @@ research-loop execute --repo "$TARGET_REPO" --id <experiment-id> --mode smoke
 research-loop execute --repo "$TARGET_REPO" --id <experiment-id> --mode full
 research-loop evaluate --repo "$TARGET_REPO" --id <experiment-id>
 research-loop record --repo "$TARGET_REPO" --id <experiment-id>
+research-loop hypothesis-evidence-add --repo "$TARGET_REPO" --spec /tmp/hypothesis-evidence.yaml
 research-loop status --repo "$TARGET_REPO"
 ```
+
+For schema v2, register hypotheses only from recorded origin evidence. After every recorded experiment, add explicit Hypothesis Evidence before forming the next candidate set. `record` applies at most one pre-approved Strategy transition; `candidate-rank` and `status` only read the resulting state.
 
 A confirmation uses a new experiment/candidate ID, the `confirm` operator, and the champion as primary parent. The runner creates an empty commit so the Git tree stays identical. `keep` is available only after the configured number of compatible full runs with the same Git tree hash.
 
@@ -52,4 +56,4 @@ research-loop upgrade --repo "$TARGET_REPO" --check
 research-loop upgrade --repo "$TARGET_REPO" --apply
 ```
 
-Always inspect `--check` first. Migrated schema v0 campaigns remain readable, while DAG candidates require a new schema v1 campaign.
+Always inspect `--check` first. Migrated schema v0 campaigns remain readable, while Strategy Contracts and Hypothesis Evidence require a new schema v2 campaign.

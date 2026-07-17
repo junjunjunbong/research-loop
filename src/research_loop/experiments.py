@@ -56,9 +56,9 @@ def prepare_experiment(
         raise ResearchLoopError(f"experiment state already exists: {target_dir}")
     contract = build_contract(root, campaign)
     candidate: Optional[Dict[str, Any]] = None
-    if profile["schema_version"] == 1 and not baseline:
+    if profile["schema_version"] in {1, 2} and not baseline:
         if not candidate_id:
-            raise ResearchLoopError("schema_version 1 experiments require --candidate-id")
+            raise ResearchLoopError("schema_version 1 and 2 experiments require --candidate-id")
         if parent is not None:
             raise ResearchLoopError("--parent cannot be combined with --candidate-id")
         from .candidates import get_candidate, rank_candidates
@@ -69,6 +69,9 @@ def prepare_experiment(
             raise ResearchLoopError(
                 f"candidate is not the current deterministic recommendation: {ranking['recommended_candidate_id']!r}"
             )
+        ranked_candidate = next(
+            item for item in ranking["ranked"] if item["candidate_id"] == candidate_id
+        )
         parent_row = next(
             (row for row in rows if row.get("experiment_id") == candidate["primary_parent_id"]),
             None,
@@ -115,7 +118,8 @@ def prepare_experiment(
                 "operator": candidate["operator"],
                 "trace": candidate["trace"],
                 "family": candidate["family"],
-                "priority": candidate["priority"],
+                "priority": ranked_candidate["priority"],
+                "selector": ranking.get("selector", "balanced"),
             }
         )
     else:

@@ -11,4 +11,4 @@ Compatibility checks are part of the Evaluation Contract. Dataset version, evalu
 
 Metric extraction failure is `invalid`, not `crash`, when execution itself completed. A failed process is `crash`. Record every attempted full run exactly once.
 
-Schema v1 records `delta_vs_baseline`, `delta_vs_parent`, and `delta_vs_champion` separately. `target_reached` never overrides a parent regression. Campaign success requires both `target_reached` and `confirmed` on the selected champion.
+Schema v1 and v2 record `delta_vs_baseline`, `delta_vs_parent`, and `delta_vs_champion` separately. `target_reached` never overrides a parent regression. Campaign success requires both `target_reached` and `confirmed` on the selected champion.

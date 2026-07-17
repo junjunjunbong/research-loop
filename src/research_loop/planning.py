@@ -21,10 +21,10 @@ def build_contract(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]
     profile = load_profile(root, campaign)
     info = git_info(root)
     metadata = campaign_metadata(root, campaign)
-    base_commit = metadata.get("base_commit") if profile["schema_version"] == 1 else info.get("commit")
+    base_commit = metadata.get("base_commit") if profile["schema_version"] in {1, 2} else info.get("commit")
     if not base_commit:
         raise ResearchLoopError("a committed base revision is required before planning")
-    return {
+    contract = {
         "schema_version": profile["schema_version"],
         "repo": str(root),
         "campaign_id": resolve_campaign_id(root, campaign),
@@ -34,6 +34,9 @@ def build_contract(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]
         "evaluation": profile["evaluation"],
         "policy": profile["policy"],
     }
+    if profile["schema_version"] == 2:
+        contract["strategy"] = profile["strategy"]
+    return contract
 
 
 def build_plan(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
@@ -43,22 +46,25 @@ def build_plan(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
     rows = read_ledger(root, campaign)
     baseline_required = not any(row.get("kind") == "baseline" for row in rows)
     plan_hash = canonical_hash(contract)
+    dry_run = {
+        "baseline_required": baseline_required,
+        "max_experiments": contract["policy"]["max_experiments"],
+        "smoke_argv": contract["environment"]["commands"]["smoke"],
+        "full_argv": contract["environment"]["commands"]["full"],
+        "primary_metric": contract["evaluation"]["primary_metric"],
+        "resource_class": contract["environment"]["resource_class"],
+        "modification_scope": contract["context"].get("allowed_paths", []),
+        "protected_paths": contract["context"].get("protected_paths", []),
+        "base_commit": contract["base_commit"],
+    }
+    if contract["schema_version"] == 2:
+        dry_run["strategy"] = contract["strategy"]
     return {
         "schema_version": contract["schema_version"],
         "generated_at": now_iso(),
         "plan_hash": plan_hash,
         "contract": contract,
-        "dry_run": {
-            "baseline_required": baseline_required,
-            "max_experiments": contract["policy"]["max_experiments"],
-            "smoke_argv": contract["environment"]["commands"]["smoke"],
-            "full_argv": contract["environment"]["commands"]["full"],
-            "primary_metric": contract["evaluation"]["primary_metric"],
-            "resource_class": contract["environment"]["resource_class"],
-            "modification_scope": contract["context"].get("allowed_paths", []),
-            "protected_paths": contract["context"].get("protected_paths", []),
-            "base_commit": contract["base_commit"],
-        },
+        "dry_run": dry_run,
     }
 
 
@@ -81,6 +87,10 @@ def approve_plan(repo: Path, plan_hash: str, campaign: Optional[str] = None) -> 
         raise ResearchLoopError("provided plan hash does not match the rendered dry-run plan")
     if current["plan_hash"] != plan_hash:
         raise ResearchLoopError("Research Profile or base commit changed after planning; render a new plan")
+    if current["schema_version"] == 2:
+        from .strategy import initialize_strategy_state
+
+        initialize_strategy_state(root, campaign)
     approval = {
         "schema_version": current["schema_version"],
         "plan_hash": plan_hash,

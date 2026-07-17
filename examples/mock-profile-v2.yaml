@@ -1,0 +1,89 @@
+schema_version: 2
+context:
+  goal: Improve the mock project's score while preserving auditable hypothesis evidence.
+  success_criteria:
+    - Increase score by at least 0.05 and confirm the identical code tree twice.
+  allowed_paths:
+    - config.json
+  protected_paths:
+    - experiment.py
+
+environment:
+  package_manager: system-python
+  resource_class: light
+  cwd: .
+  commands:
+    smoke: [python3, experiment.py, --smoke]
+    full: [python3, experiment.py]
+  timeout_seconds: 30
+  required_env: []
+
+evaluation:
+  primary_metric:
+    name: score
+    direction: maximize
+    parser:
+      type: json
+      path: results/metrics.json
+      key: metrics.score
+  required_artifacts:
+    - results/metrics.json
+  compatibility:
+    - name: dataset_version
+      expected: mock-v1
+      parser:
+        type: json
+        path: results/metrics.json
+        key: metadata.dataset_version
+    - name: query_count
+      expected: 100
+      parser:
+        type: json
+        path: results/metrics.json
+        key: metadata.query_count
+    - name: evaluation_config
+      expected: mock-eval-v1
+      parser:
+        type: json
+        path: results/metrics.json
+        key: metadata.evaluation_config
+  min_duration_seconds: 0
+  confirmation_runs: 2
+  min_delta: 0.01
+  noise_tolerance: 0.001
+  acceptance:
+    min_parent_delta: 0.01
+    noise_tolerance: 0.001
+  target:
+    type: absolute_improvement
+    value: 0.05
+
+strategy:
+  problem_shape:
+    objective: mixed
+    search_space: unstructured_code
+    fidelity: single
+    noise: unknown
+  rationale:
+    - Diagnose the measured bottleneck before prioritizing score improvements.
+  initial_selector: diagnostic
+  transitions:
+    - id: diagnostic-to-balanced
+      priority: 10
+      from: diagnostic
+      to: balanced
+      trigger:
+        type: experiments_recorded_gte
+        value: 1
+
+policy:
+  campaign_id: mock-strategy-v2
+  branch_prefix: autoresearch
+  max_experiments: 5
+  experiment_timeout_seconds: 30
+  campaign_timeout_seconds: 180
+  allow_gpu: false
+  allow_remote: false
+  allow_paid: false
+  allow_shell: false
+  auto_commit: true

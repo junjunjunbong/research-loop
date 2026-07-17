@@ -172,7 +172,7 @@ def evaluate_experiment(
             if metadata["kind"] == "baseline":
                 result["status"] = "keep"
                 result["reasons"].append("valid baseline anchor")
-                if profile["schema_version"] == 1:
+                if profile["schema_version"] in {1, 2}:
                     result.update(
                         {
                             "parent_value": None,

@@ -10,7 +10,9 @@ from .util import now_iso, read_json, read_yaml, write_json
 
 
 OPERATORS = {"draft", "improve", "debug", "confirm", "recombine"}
+V2_OPERATORS = OPERATORS | {"diagnose"}
 TRACES = {"exploit", "explore", "confirm"}
+V2_TRACES = TRACES | {"diagnose"}
 SCORE_FIELDS = ("alignment", "impact", "feasibility", "information_gain", "novelty")
 SCORE_WEIGHTS = {
     "alignment": 0.30,
@@ -27,13 +29,13 @@ def _store_path(repo: Path, campaign: Optional[str]) -> Path:
 
 def _load_store(repo: Path, campaign: Optional[str]) -> Dict[str, Any]:
     profile = load_profile(repo, campaign)
-    if profile["schema_version"] != 1:
-        raise ResearchLoopError("candidate DAG features require a schema_version 1 campaign")
+    if profile["schema_version"] not in {1, 2}:
+        raise ResearchLoopError("candidate DAG features require a schema_version 1 or 2 campaign")
     path = _store_path(repo, campaign)
     if not path.exists():
-        write_json(path, {"schema_version": 1, "candidates": []})
+        raise ResearchLoopError(f"missing candidate store: {path}")
     store = read_json(path)
-    if store.get("schema_version") != 1 or not isinstance(store.get("candidates"), list):
+    if store.get("schema_version") != profile["schema_version"] or not isinstance(store.get("candidates"), list):
         raise ResearchLoopError(f"invalid candidate store: {path}")
     return store
 
@@ -72,7 +74,7 @@ def _parent_rows(rows: List[Dict[str, str]]) -> Dict[str, Dict[str, str]]:
     return {row["experiment_id"]: row for row in rows}
 
 
-def _normalize_candidate(spec: Dict[str, Any]) -> Dict[str, Any]:
+def _normalize_candidate(spec: Dict[str, Any], version: int) -> Dict[str, Any]:
     candidate_id = validate_slug(str(spec.get("candidate_id", "")), "candidate_id")
     hypothesis_id = validate_slug(str(spec.get("hypothesis_id", "")), "hypothesis_id")
     statement = spec.get("statement")
@@ -88,14 +90,20 @@ def _normalize_candidate(spec: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(family, str) or not family.strip():
         raise ResearchLoopError("candidate family must be non-empty")
     validate_slug(family, "family")
-    if operator not in OPERATORS:
-        raise ResearchLoopError(f"operator must be one of {sorted(OPERATORS)}")
-    if trace not in TRACES:
-        raise ResearchLoopError(f"trace must be one of {sorted(TRACES)}")
+    operators = V2_OPERATORS if version == 2 else OPERATORS
+    traces = V2_TRACES if version == 2 else TRACES
+    if operator not in operators:
+        raise ResearchLoopError(f"operator must be one of {sorted(operators)}")
+    if trace not in traces:
+        raise ResearchLoopError(f"trace must be one of {sorted(traces)}")
     if trace == "confirm" and operator != "confirm":
         raise ResearchLoopError("confirm trace requires the confirm operator")
     if operator == "confirm" and trace != "confirm":
         raise ResearchLoopError("confirm operator requires the confirm trace")
+    if operator == "diagnose" and trace != "diagnose":
+        raise ResearchLoopError("diagnose operator requires the diagnose trace")
+    if trace == "diagnose" and operator != "diagnose":
+        raise ResearchLoopError("diagnose trace requires the diagnose operator")
     if not isinstance(primary_parent_id, str) or not primary_parent_id:
         raise ResearchLoopError("primary_parent_id must be non-empty")
     if not isinstance(source_parent_ids, list) or not source_parent_ids or not all(
@@ -117,7 +125,7 @@ def _normalize_candidate(spec: Dict[str, Any]) -> Dict[str, Any]:
         raise ResearchLoopError("scores must be a mapping")
     normalized_scores = {field: _normalize_score(scores.get(field), field) for field in SCORE_FIELDS}
     priority = sum(SCORE_WEIGHTS[field] * normalized_scores[field]["value"] for field in SCORE_FIELDS)
-    return {
+    candidate = {
         "candidate_id": candidate_id,
         "hypothesis_id": hypothesis_id,
         "statement": statement.strip(),
@@ -129,15 +137,18 @@ def _normalize_candidate(spec: Dict[str, Any]) -> Dict[str, Any]:
         "evidence": evidence,
         "scores": normalized_scores,
         "estimated_cost": estimated_cost,
-        "priority": round(priority, 12),
         "status": "pending",
         "created_at": now_iso(),
     }
+    if version == 1:
+        candidate["priority"] = round(priority, 12)
+    return candidate
 
 
 def add_candidate(repo: Path, *, spec_path: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
+    profile = load_profile(repo, campaign)
     store = _load_store(repo, campaign)
-    candidate = _normalize_candidate(read_yaml(spec_path.resolve()))
+    candidate = _normalize_candidate(read_yaml(spec_path.resolve()), profile["schema_version"])
     if any(item.get("candidate_id") == candidate["candidate_id"] for item in store["candidates"]):
         raise ResearchLoopError(f"candidate already exists: {candidate['candidate_id']}")
     rows = read_ledger(repo, campaign)
@@ -145,6 +156,10 @@ def add_candidate(repo: Path, *, spec_path: Path, campaign: Optional[str] = None
     missing = [item for item in candidate["source_parent_ids"] if item not in parents]
     if missing:
         raise ResearchLoopError(f"candidate source parents are not recorded experiments: {', '.join(missing)}")
+    if profile["schema_version"] == 2:
+        from .hypotheses import get_hypothesis
+
+        get_hypothesis(repo, candidate["hypothesis_id"], campaign)
     store["candidates"].append(candidate)
     write_json(_store_path(repo, campaign), store)
     write_json(campaign_dir(repo, campaign) / "candidates" / f"{candidate['candidate_id']}.json", candidate)
@@ -200,6 +215,7 @@ def _eligibility(
     rows: List[Dict[str, str]],
     candidates: List[Dict[str, Any]],
     direction: str,
+    assessments: Optional[Dict[str, str]] = None,
 ) -> Tuple[bool, List[str]]:
     reasons: List[str] = []
     parents = _parent_rows(rows)
@@ -209,6 +225,8 @@ def _eligibility(
         return False, reasons
     if candidate.get("status") != "pending":
         reasons.append(f"candidate status is {candidate.get('status')}")
+    if assessments and assessments.get(candidate["hypothesis_id"]) == "falsified":
+        reasons.append("candidate hypothesis is falsified")
     operator = candidate["operator"]
     if operator == "debug" and parent.get("status") not in {"invalid", "crash"}:
         reasons.append("debug requires an invalid or crashed parent")
@@ -238,12 +256,29 @@ def rank_candidates(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any
     candidates = list_candidates(repo, campaign)
     rows = read_ledger(repo, campaign)
     direction = profile["evaluation"]["primary_metric"]["direction"]
+    assessments: Dict[str, str] = {}
+    selector = "balanced"
+    if profile["schema_version"] == 2:
+        from .hypotheses import list_hypotheses
+        from .strategy import read_strategy_state, score_candidate, selector_definition
+
+        assessments = {
+            item["hypothesis_id"]: item["assessment"]
+            for item in list_hypotheses(repo, campaign)["hypotheses"]
+        }
+        selector = read_strategy_state(repo, campaign)["active_selector"]
+        selector_policy = selector_definition(selector)
+    else:
+        selector_policy = {"preferred_operator": None, "explore_quota": 3}
     experiments = [row for row in rows if row.get("kind") != "baseline"]
     remaining = max(0, profile["policy"]["max_experiments"] - len(experiments))
     ranked: List[Dict[str, Any]] = []
     for candidate in candidates:
-        eligible, reasons = _eligibility(candidate, rows, candidates, direction)
-        ranked.append({**candidate, "eligible": eligible, "eligibility_reasons": reasons})
+        eligible, reasons = _eligibility(candidate, rows, candidates, direction, assessments)
+        scored = dict(candidate)
+        if profile["schema_version"] == 2:
+            scored.update(score_candidate(candidate, selector))
+        ranked.append({**scored, "eligible": eligible, "eligibility_reasons": reasons})
     eligible = [item for item in ranked if item["eligible"]]
     eligible.sort(key=lambda item: (-item["priority"], item["estimated_cost"], item["created_at"], item["candidate_id"]))
 
@@ -259,6 +294,12 @@ def rank_candidates(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any
     elif champion_needs_confirmation and confirm_candidates:
         recommendation = confirm_candidates[0]
         rule = "confirmation-priority"
+    elif selector_policy["preferred_operator"]:
+        preferred = [
+            item for item in eligible if item["operator"] == selector_policy["preferred_operator"]
+        ]
+        recommendation = (preferred or eligible or [None])[0]
+        rule = f"{selector}-priority" if preferred else f"{selector}-fallback"
     else:
         since_explore = 0
         for row in reversed(experiments):
@@ -267,13 +308,15 @@ def rank_candidates(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any
             if row.get("trace") != "confirm":
                 since_explore += 1
         explore = [item for item in eligible if item["trace"] == "explore"]
-        if since_explore >= 3 and explore:
+        quota = selector_policy["explore_quota"]
+        if quota is not None and since_explore >= quota and explore:
             recommendation = explore[0]
             rule = "explore-quota"
         elif eligible:
             recommendation = eligible[0]
     return {
-        "schema_version": 1,
+        "schema_version": profile["schema_version"],
+        "selector": selector,
         "remaining_experiments": remaining,
         "rule": rule,
         "recommended_candidate_id": recommendation["candidate_id"] if recommendation else None,
@@ -299,7 +342,7 @@ def scoped_evidence(
         operator = candidate["operator"]
         parent_id = candidate["primary_parent_id"]
         source_parent_ids = candidate["source_parent_ids"]
-    elif operator not in OPERATORS or not parent_id:
+    elif operator not in (V2_OPERATORS if profile["schema_version"] == 2 else OPERATORS) or not parent_id:
         raise ResearchLoopError("evidence requires --candidate-id or a valid --operator and --parent-id")
     source_parent_ids = source_parent_ids or [parent_id]
     if parent_id not in parents:

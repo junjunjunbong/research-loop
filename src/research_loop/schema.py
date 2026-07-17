@@ -19,9 +19,28 @@ VALID_STATUSES = {
     "crash",
     "invalid",
 }
-SCHEMA_VERSIONS = {0, 1}
+SCHEMA_VERSIONS = {0, 1, 2}
 TARGET_TYPES = {"relative_improvement", "absolute_improvement", "metric_value"}
 PARSER_TYPES = {"json", "jsonl", "regex"}
+SELECTOR_TYPES = {"diagnostic", "balanced", "optimization"}
+OBJECTIVE_TYPES = {"diagnose", "optimize", "mixed"}
+SEARCH_SPACE_TYPES = {"structured_parameters", "unstructured_code", "mixed"}
+FIDELITY_TYPES = {"single", "multi"}
+NOISE_TYPES = {"low", "high", "unknown"}
+TRANSITION_TRIGGERS = {
+    "baseline_recorded",
+    "experiments_recorded_gte",
+    "promising_results_gte",
+    "consecutive_inconclusive_gte",
+    "target_reached",
+    "remaining_experiments_lte",
+}
+VALUE_TRANSITION_TRIGGERS = {
+    "experiments_recorded_gte",
+    "promising_results_gte",
+    "consecutive_inconclusive_gte",
+    "remaining_experiments_lte",
+}
 SECRET_KEY_RE = re.compile(r"(?:password|secret|credential|api[_-]?key|token)", re.I)
 
 
@@ -87,7 +106,7 @@ def _reject_secrets(value: Any, prefix: str = "profile") -> None:
 
 def normalize_profile(profile: Dict[str, Any], repo: Path) -> Dict[str, Any]:
     result = deepcopy(profile)
-    result.setdefault("schema_version", 1)
+    version = result.get("schema_version")
     policy = result.setdefault("policy", {})
     if isinstance(policy, dict):
         policy.setdefault("campaign_id", f"{datetime.now().astimezone():%Y-%m-%d}-{repo.name.lower().replace('_', '-')}")
@@ -114,7 +133,7 @@ def normalize_profile(profile: Dict[str, Any], repo: Path) -> Dict[str, Any]:
         evaluation.setdefault("confirmation_runs", 2)
         evaluation.setdefault("min_delta", 0.0)
         evaluation.setdefault("noise_tolerance", 0.0)
-        if result["schema_version"] == 1:
+        if version in {1, 2}:
             evaluation.setdefault(
                 "acceptance",
                 {
@@ -130,6 +149,63 @@ def normalize_profile(profile: Dict[str, Any], repo: Path) -> Dict[str, Any]:
                 },
             )
     return result
+
+
+def _validate_strategy(strategy: Any) -> None:
+    strategy = _mapping(strategy, "strategy")
+    problem = _mapping(strategy.get("problem_shape"), "strategy.problem_shape")
+    enums = (
+        ("objective", OBJECTIVE_TYPES),
+        ("search_space", SEARCH_SPACE_TYPES),
+        ("fidelity", FIDELITY_TYPES),
+        ("noise", NOISE_TYPES),
+    )
+    for field, allowed in enums:
+        if problem.get(field) not in allowed:
+            raise ResearchLoopError(f"strategy.problem_shape.{field} must be one of {sorted(allowed)}")
+
+    rationale = strategy.get("rationale")
+    if not isinstance(rationale, list) or not rationale or not all(
+        isinstance(item, str) and item.strip() for item in rationale
+    ):
+        raise ResearchLoopError("strategy.rationale must be a non-empty list of strings")
+    if strategy.get("initial_selector") not in SELECTOR_TYPES:
+        raise ResearchLoopError(f"strategy.initial_selector must be one of {sorted(SELECTOR_TYPES)}")
+
+    transitions = strategy.get("transitions", [])
+    if not isinstance(transitions, list):
+        raise ResearchLoopError("strategy.transitions must be a list")
+    seen_ids = set()
+    seen_priorities = set()
+    for index, item in enumerate(transitions):
+        field = f"strategy.transitions[{index}]"
+        transition = _mapping(item, field)
+        transition_id = validate_slug(_string(transition.get("id"), f"{field}.id"), f"{field}.id")
+        if transition_id in seen_ids:
+            raise ResearchLoopError(f"duplicate strategy transition id: {transition_id}")
+        seen_ids.add(transition_id)
+        priority = transition.get("priority")
+        if not isinstance(priority, int) or isinstance(priority, bool) or priority < 0:
+            raise ResearchLoopError(f"{field}.priority must be a non-negative integer")
+        if priority in seen_priorities:
+            raise ResearchLoopError(f"duplicate strategy transition priority: {priority}")
+        seen_priorities.add(priority)
+        source = transition.get("from")
+        target = transition.get("to")
+        if source not in SELECTOR_TYPES or target not in SELECTOR_TYPES:
+            raise ResearchLoopError(f"{field}.from and .to must be supported selectors")
+        if source == target:
+            raise ResearchLoopError(f"{field}.from and .to must differ")
+        trigger = _mapping(transition.get("trigger"), f"{field}.trigger")
+        trigger_type = trigger.get("type")
+        if trigger_type not in TRANSITION_TRIGGERS:
+            raise ResearchLoopError(f"{field}.trigger.type must be one of {sorted(TRANSITION_TRIGGERS)}")
+        if trigger_type in VALUE_TRANSITION_TRIGGERS:
+            value = trigger.get("value")
+            if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+                raise ResearchLoopError(f"{field}.trigger.value must be a non-negative integer")
+        elif "value" in trigger:
+            raise ResearchLoopError(f"{field}.trigger.value is not allowed for {trigger_type}")
 
 
 def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
@@ -149,7 +225,7 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
     environment = _mapping(profile.get("environment"), "environment")
     _string(environment.get("package_manager"), "environment.package_manager")
     if environment.get("resource_class") not in {"light", "local_cpu"}:
-        raise ResearchLoopError("v0 supports only light or local_cpu resource_class")
+        raise ResearchLoopError("the runner supports only light or local_cpu resource_class")
     require_relative_path(_string(environment.get("cwd"), "environment.cwd"), "environment.cwd")
     _positive_number(environment.get("timeout_seconds"), "environment.timeout_seconds")
     commands = _mapping(environment.get("commands"), "environment.commands")
@@ -174,7 +250,7 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
         raise ResearchLoopError("evaluation.confirmation_runs must be an integer >= 2")
     _positive_number(evaluation.get("min_delta", 0), "evaluation.min_delta", allow_zero=True)
     _positive_number(evaluation.get("noise_tolerance", 0), "evaluation.noise_tolerance", allow_zero=True)
-    if version == 1:
+    if version in {1, 2}:
         acceptance = _mapping(evaluation.get("acceptance"), "evaluation.acceptance")
         _positive_number(
             acceptance.get("min_parent_delta", 0),
@@ -214,16 +290,22 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
         raise ResearchLoopError("campaign timeout cannot be shorter than experiment timeout")
     for key in ("allow_gpu", "allow_remote", "allow_paid", "allow_shell"):
         if policy.get(key) is not False:
-            raise ResearchLoopError(f"v0 requires policy.{key}: false")
+            raise ResearchLoopError(f"the runner requires policy.{key}: false")
     if policy.get("auto_commit") is not True:
-        raise ResearchLoopError("v0 requires policy.auto_commit: true for isolated experiment worktrees")
+        raise ResearchLoopError("the runner requires policy.auto_commit: true for isolated experiment worktrees")
+
+    if version == 2:
+        _validate_strategy(profile.get("strategy"))
 
 
 def split_profile(profile: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
     version = profile["schema_version"]
-    return {
+    documents = {
         "research-context.yaml": {"schema_version": version, "context": profile["context"]},
         "environment.yaml": {"schema_version": version, "environment": profile["environment"]},
         "evaluation.yaml": {"schema_version": version, "evaluation": profile["evaluation"]},
         "loop-policy.yaml": {"schema_version": version, "policy": profile["policy"]},
     }
+    if version == 2:
+        documents["research-strategy.yaml"] = {"schema_version": version, "strategy": profile["strategy"]}
+    return documents

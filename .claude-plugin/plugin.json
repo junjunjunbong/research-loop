@@ -1,7 +1,7 @@
 {
   "name": "research-loop",
-  "version": "0.2.0",
-  "description": "Turn an existing Git research project and a user goal into an approved, evidence-guided experiment DAG.",
+  "version": "0.3.0",
+  "description": "Turn an existing Git research project and a user goal into an approved, strategy-guided experiment campaign.",
   "author": {
     "name": "Research Loop contributors"
   },

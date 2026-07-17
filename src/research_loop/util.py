@@ -54,6 +54,29 @@ def write_json(path: Path, value: Dict[str, Any]) -> None:
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
+def read_jsonl(path: Path) -> List[Dict[str, Any]]:
+    if not path.exists():
+        return []
+    result: List[Dict[str, Any]] = []
+    try:
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+            if not line.strip():
+                continue
+            value = json.loads(line)
+            if not isinstance(value, dict):
+                raise ResearchLoopError(f"JSONL line must be an object: {path}:{number}")
+            result.append(value)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ResearchLoopError(f"cannot read JSONL {path}: {exc}") from exc
+    return result
+
+
+def append_jsonl(path: Path, value: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n")
+
+
 def run(
     argv: Iterable[str],
     *,
@@ -120,4 +143,3 @@ def list_files(root: Path, *, excluded: Optional[List[str]] = None) -> List[Path
         if path.is_file():
             result.append(path)
     return result
-

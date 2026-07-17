@@ -1,7 +1,7 @@
 {
   "name": "research-loop",
-  "version": "0.2.0",
-  "description": "Turn an existing Git research project and a user goal into an approved, evidence-guided experiment DAG.",
+  "version": "0.3.0",
+  "description": "Turn an existing Git research project and a user goal into an approved, strategy-guided experiment campaign.",
   "author": {
     "name": "Research Loop contributors"
   },
@@ -18,7 +18,7 @@
   "interface": {
     "displayName": "Research Loop",
     "shortDescription": "Run safe evidence-guided research experiments",
-    "longDescription": "Inspect a Git research project, compile execution and evaluation contracts, rank evidence-backed DAG candidates, and run an approved auditable local experiment campaign.",
+    "longDescription": "Inspect a Git research project, compile execution, evaluation, and strategy contracts, rank evidence-backed hypotheses, and run an approved auditable local experiment campaign.",
     "developerName": "Research Loop contributors",
     "category": "Developer Tools",
     "capabilities": [

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from .errors import ResearchLoopError
 from .git import add_local_exclude, git_info, repo_root, resolve_commit
 from .schema import normalize_profile, split_profile, validate_profile
-from .util import now_iso, read_json, read_yaml, write_json, write_yaml
+from .util import append_jsonl, canonical_hash, now_iso, read_json, read_yaml, write_json, write_yaml
 
 
 V0_EXPERIMENT_COLUMNS = [
@@ -54,6 +54,7 @@ V1_EXTRA_EXPERIMENT_COLUMNS = [
 
 EXPERIMENT_COLUMNS = V0_EXPERIMENT_COLUMNS
 V1_EXPERIMENT_COLUMNS = V0_EXPERIMENT_COLUMNS + V1_EXTRA_EXPERIMENT_COLUMNS
+V2_EXPERIMENT_COLUMNS = V1_EXPERIMENT_COLUMNS + ["selector"]
 
 PROFILE_FILES = {
     "context": "research-context.yaml",
@@ -61,6 +62,7 @@ PROFILE_FILES = {
     "evaluation": "evaluation.yaml",
     "policy": "loop-policy.yaml",
 }
+STRATEGY_PROFILE_FILE = "research-strategy.yaml"
 
 
 def research_dir(repo: Path) -> Path:
@@ -151,7 +153,7 @@ def ensure_campaign_writable(repo: Path, campaign: Optional[str] = None) -> None
     if is_v1_control_plane(repo):
         metadata = campaign_metadata(repo, campaign)
         if metadata.get("migrated_from") == 0:
-            raise ResearchLoopError("migrated schema v0 campaigns are read-only; create a schema v1 campaign")
+            raise ResearchLoopError("migrated schema v0 campaigns are read-only; create a new versioned campaign")
 
 
 def load_profile(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
@@ -164,13 +166,21 @@ def load_profile(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
             raise ResearchLoopError(f"missing Research Profile file: {path}")
         document = read_yaml(path)
         document_version = document.get("schema_version")
-        if document_version not in {0, 1} or key not in document:
+        if document_version not in {0, 1, 2} or key not in document:
             raise ResearchLoopError(f"invalid Research Profile document: {path}")
         if version is None:
             version = document_version
         elif version != document_version:
             raise ResearchLoopError("Research Profile documents use mixed schema versions")
         merged[key] = document[key]
+    if version == 2:
+        path = root / STRATEGY_PROFILE_FILE
+        if not path.exists():
+            raise ResearchLoopError(f"missing Research Profile file: {path}")
+        document = read_yaml(path)
+        if document.get("schema_version") != 2 or "strategy" not in document:
+            raise ResearchLoopError(f"invalid Research Profile document: {path}")
+        merged["strategy"] = document["strategy"]
     merged["schema_version"] = version
     validate_profile(merged, repo_root(repo))
     return merged
@@ -181,13 +191,40 @@ def _initialize_campaign(target: Path, profile: Dict[str, Any]) -> None:
     for filename, document in split_profile(profile).items():
         write_yaml(target / filename, document)
     (target / "runs").mkdir()
-    columns = V1_EXPERIMENT_COLUMNS if profile["schema_version"] == 1 else V0_EXPERIMENT_COLUMNS
+    if profile["schema_version"] == 2:
+        columns = V2_EXPERIMENT_COLUMNS
+    elif profile["schema_version"] == 1:
+        columns = V1_EXPERIMENT_COLUMNS
+    else:
+        columns = V0_EXPERIMENT_COLUMNS
     with (target / "experiments.tsv").open("w", encoding="utf-8", newline="") as handle:
         csv.writer(handle, delimiter="\t").writerow(columns)
     (target / "hypotheses.md").write_text("# Hypotheses\n\nNo hypotheses have been prepared.\n", encoding="utf-8")
-    if profile["schema_version"] == 1:
+    if profile["schema_version"] in {1, 2}:
         (target / "candidates").mkdir()
-        write_json(target / "candidates.json", {"schema_version": 1, "candidates": []})
+        write_json(target / "candidates.json", {"schema_version": profile["schema_version"], "candidates": []})
+    if profile["schema_version"] == 2:
+        timestamp = now_iso()
+        write_json(target / "hypotheses.json", {"schema_version": 2, "hypotheses": []})
+        (target / "hypothesis-events.jsonl").write_text("", encoding="utf-8")
+        strategy_state = {
+            "schema_version": 2,
+            "contract_hash": canonical_hash(profile["strategy"]),
+            "active_selector": profile["strategy"]["initial_selector"],
+            "applied_transition_ids": [],
+            "updated_at": timestamp,
+        }
+        write_json(target / "strategy-state.json", strategy_state)
+        (target / "strategy-events.jsonl").write_text("", encoding="utf-8")
+        append_jsonl(
+            target / "strategy-events.jsonl",
+            {
+                "event": "initialized",
+                "selector": strategy_state["active_selector"],
+                "contract_hash": strategy_state["contract_hash"],
+                "created_at": timestamp,
+            },
+        )
 
 
 def _write_initial_state(target: Path, profile: Dict[str, Any], base_commit: str, base_branch: str) -> None:
@@ -219,7 +256,7 @@ def setup_project(repo: Path, profile_path: Path) -> Dict[str, Any]:
     root = repo_root(repo)
     profile = normalize_profile(read_yaml(profile_path.resolve()), root)
     validate_profile(profile, root)
-    if profile["schema_version"] == 1:
+    if profile["schema_version"] in {1, 2}:
         return new_campaign(root, profile_path=profile_path, base="HEAD")
 
     target = root / ".research"
@@ -241,13 +278,13 @@ def setup_project(repo: Path, profile_path: Path) -> Dict[str, Any]:
 def new_campaign(repo: Path, *, profile_path: Path, base: str = "HEAD") -> Dict[str, Any]:
     root = repo_root(repo)
     profile = normalize_profile(read_yaml(profile_path.resolve()), root)
-    profile["schema_version"] = 1
-    profile = normalize_profile(profile, root)
+    if profile.get("schema_version") not in {1, 2}:
+        raise ResearchLoopError("new-campaign requires an explicit schema_version of 1 or 2")
     validate_profile(profile, root)
     campaign_id = profile["policy"]["campaign_id"]
     control = root / ".research"
     if control.exists() and not (control / "index.json").exists():
-        raise ResearchLoopError("v0 control plane must be upgraded before adding a v1 campaign")
+        raise ResearchLoopError("v0 control plane must be upgraded before adding a versioned campaign")
     control.mkdir(parents=True, exist_ok=True)
     target = control / "campaigns" / campaign_id
     if target.exists():
@@ -266,7 +303,7 @@ def new_campaign(repo: Path, *, profile_path: Path, base: str = "HEAD") -> Dict[
         "campaign_id": campaign_id,
         "base_commit": base_commit,
         "base_ref": base,
-        "profile_schema": 1,
+        "profile_schema": profile["schema_version"],
         "created_at": now_iso(),
     }
     write_json(control / "index.json", index)
@@ -275,7 +312,7 @@ def new_campaign(repo: Path, *, profile_path: Path, base: str = "HEAD") -> Dict[
         "repo": str(root),
         "research_dir": str(target),
         "campaign_id": campaign_id,
-        "schema_version": 1,
+        "schema_version": profile["schema_version"],
         "base_commit": base_commit,
         "next": "validate and render plan",
     }

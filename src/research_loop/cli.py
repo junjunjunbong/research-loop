@@ -10,6 +10,7 @@ from .errors import ResearchLoopError
 from .candidates import add_candidate, rank_candidates, scoped_evidence
 from .executor import execute_experiment
 from .experiments import prepare_experiment
+from .hypotheses import add_hypothesis, add_hypothesis_evidence, list_hypotheses
 from .inspector import inspect_project
 from .ledger import campaign_status, checkpoint, record_experiment
 from .metrics import evaluate_experiment
@@ -27,27 +28,27 @@ from .state import (
 def _repo_parser(subparsers: argparse._SubParsersAction, name: str, help_text: str) -> argparse.ArgumentParser:
     parser = subparsers.add_parser(name, help=help_text)
     parser.add_argument("--repo", type=Path, default=Path.cwd(), help="Target Git project")
-    parser.add_argument("--campaign", help="Campaign id; defaults to the active v1 campaign")
+    parser.add_argument("--campaign", help="Campaign id; defaults to the active versioned campaign")
     return parser
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-loop")
-    parser.add_argument("--version", action="version", version="research-loop 0.2.0")
+    parser.add_argument("--version", action="version", version="research-loop 0.3.0")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _repo_parser(subparsers, "inspect", "Inspect project evidence without changing it")
     setup = _repo_parser(subparsers, "setup", "Materialize a compiled Research Profile")
     setup.add_argument("--profile", type=Path, required=True, help="Compiled profile YAML")
-    new = _repo_parser(subparsers, "new-campaign", "Create a schema v1 campaign from an explicit Git base")
-    new.add_argument("--profile", type=Path, required=True, help="Compiled schema v1 profile YAML")
+    new = _repo_parser(subparsers, "new-campaign", "Create a schema v1 or v2 campaign from an explicit Git base")
+    new.add_argument("--profile", type=Path, required=True, help="Compiled schema v1 or v2 profile YAML")
     new.add_argument("--base", default="HEAD", help="Git revision to freeze as the campaign base")
     upgrade = _repo_parser(subparsers, "upgrade", "Check or apply a v0 to v1 control-plane migration")
     upgrade_mode = upgrade.add_mutually_exclusive_group(required=True)
     upgrade_mode.add_argument("--check", action="store_true")
     upgrade_mode.add_argument("--apply", action="store_true")
     _repo_parser(subparsers, "campaign-list", "List local research campaigns")
-    activate = _repo_parser(subparsers, "campaign-activate", "Set the active v1 campaign")
+    activate = _repo_parser(subparsers, "campaign-activate", "Set the active versioned campaign")
     activate.add_argument("--id", required=True, dest="campaign_id")
     _repo_parser(subparsers, "validate", "Validate the generated Research Profile")
     _repo_parser(subparsers, "plan", "Render and save a dry-run campaign plan")
@@ -65,6 +66,15 @@ def build_parser() -> argparse.ArgumentParser:
     candidate_add = _repo_parser(subparsers, "candidate-add", "Register a scored DAG hypothesis candidate")
     candidate_add.add_argument("--spec", type=Path, required=True)
     _repo_parser(subparsers, "candidate-rank", "Rank eligible candidates with the deterministic policy")
+    hypothesis_add = _repo_parser(subparsers, "hypothesis-add", "Register a schema v2 research hypothesis")
+    hypothesis_add.add_argument("--spec", type=Path, required=True)
+    _repo_parser(subparsers, "hypothesis-list", "List schema v2 hypotheses and assessments")
+    hypothesis_evidence = _repo_parser(
+        subparsers,
+        "hypothesis-evidence-add",
+        "Append evidence and an assessment to a schema v2 hypothesis",
+    )
+    hypothesis_evidence.add_argument("--spec", type=Path, required=True)
     evidence = _repo_parser(subparsers, "evidence", "Render operator-scoped experiment evidence")
     evidence.add_argument("--candidate-id")
     evidence.add_argument("--operator")
@@ -114,6 +124,12 @@ def dispatch(args: argparse.Namespace) -> Dict[str, Any]:
         return add_candidate(repo, spec_path=args.spec, campaign=args.campaign)
     if args.command == "candidate-rank":
         return rank_candidates(repo, args.campaign)
+    if args.command == "hypothesis-add":
+        return add_hypothesis(repo, spec_path=args.spec, campaign=args.campaign)
+    if args.command == "hypothesis-list":
+        return list_hypotheses(repo, args.campaign)
+    if args.command == "hypothesis-evidence-add":
+        return add_hypothesis_evidence(repo, spec_path=args.spec, campaign=args.campaign)
     if args.command == "evidence":
         return scoped_evidence(
             repo,

@@ -101,7 +101,7 @@ def record_experiment(
         "compatibility_hash": evaluation["compatibility_hash"],
         "created_at": now_iso(),
     }
-    if profile["schema_version"] == 1:
+    if profile["schema_version"] in {1, 2}:
         row.update(
             {
                 "primary_parent_id": metadata.get("primary_parent_id", ""),
@@ -129,10 +129,16 @@ def record_experiment(
                 "confirmed": str(bool(evaluation.get("confirmed", False))).lower(),
             }
         )
+    if profile["schema_version"] == 2:
+        row["selector"] = metadata.get("selector", "baseline" if metadata["kind"] == "baseline" else "balanced")
     ledger_path = campaign_dir(root, campaign) / "experiments.tsv"
     with ledger_path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=ledger_columns(root, campaign), delimiter="\t", extrasaction="raise")
         writer.writerow(row)
+    if profile["schema_version"] == 2:
+        from .strategy import apply_strategy_transition
+
+        apply_strategy_transition(root, campaign)
     checkpoint(
         root,
         current="experiment-recorded",
@@ -206,11 +212,11 @@ def campaign_status(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any
         )
     result.update(
         {
-            "schema_version": 1,
+            "schema_version": profile["schema_version"],
             "champion": champion,
             "trace_counts": {
                 trace: sum(1 for row in experiments if row.get("trace") == trace)
-                for trace in ("exploit", "explore", "confirm")
+                for trace in (("exploit", "explore", "confirm", "diagnose") if profile["schema_version"] == 2 else ("exploit", "explore", "confirm"))
             },
             "target_reached": bool(champion and champion.get("target_reached", "").lower() == "true"),
             "target_progress": {"type": target["type"], "achieved": achieved, "required": target["value"]},
@@ -222,4 +228,10 @@ def campaign_status(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any
             "termination_reason": termination_reason,
         }
     )
+    if profile["schema_version"] == 2:
+        from .hypotheses import list_hypotheses
+        from .strategy import strategy_status
+
+        result["strategy"] = strategy_status(root, campaign)
+        result["hypotheses"] = list_hypotheses(root, campaign)["assessment_counts"]
     return result

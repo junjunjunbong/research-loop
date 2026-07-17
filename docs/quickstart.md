@@ -15,7 +15,7 @@ Use an existing project with at least one commit. Setup may inspect dirty state,
 uv run research-loop inspect --repo /path/to/project
 ```
 
-Give the inspection result, the user's exact goal, and verified project evidence to the Research Loop Skill. It compiles a YAML profile following the bundled schema.
+Give the inspection result, the user's exact goal, and verified project evidence to the Research Loop Skill. It compiles a schema v2 YAML profile with execution, evaluation, strategy, and policy contracts.
 
 ## 3. Materialize and approve
 
@@ -33,4 +33,4 @@ uv run research-loop approve --repo /path/to/project --plan-hash <hash>
 
 ## 4. Run the campaign
 
-Use the exact baseline, evidence, candidate, ranking, and experiment sequence in the Skill's `references/workflow.md`. Run `status` after every recorded result and read the active campaign's `handoff.md` when resuming.
+Use the exact baseline, hypothesis, evidence, candidate, ranking, and experiment sequence in the Skill's `references/workflow.md`. Run `status` after every recorded result and read the active campaign's `handoff.md` when resuming. Strategy transitions happen only after `record` and only when an approved rule matches.

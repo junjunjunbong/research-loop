@@ -24,7 +24,7 @@ def test_plugin_manifests_and_marketplace() -> None:
 
     assert codex_manifest["name"] == claude_manifest["name"] == "research-loop"
     assert codex_manifest["version"] == claude_manifest["version"]
-    assert codex_manifest["version"] == "0.2.0"
+    assert codex_manifest["version"] == "0.3.0"
     assert codex_manifest["description"] == claude_manifest["description"]
     assert codex_manifest["skills"] == "./skills/"
 
