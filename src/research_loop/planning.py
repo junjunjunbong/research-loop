@@ -58,6 +58,7 @@ def build_plan(repo: Path, campaign: Optional[str] = None) -> Dict[str, Any]:
         "protected_paths": contract["context"].get("protected_paths", []),
         "base_commit": contract["base_commit"],
         "knowledge_access": resolve_knowledge_access(contract["policy"]),
+        "research_surface": contract["context"].get("research_surface", {}),
     }
     if contract["schema_version"] == 2:
         dry_run["strategy"] = contract["strategy"]

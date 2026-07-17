@@ -224,6 +224,7 @@ def proposal_context(repo: Path, campaign: Optional[str] = None) -> Dict[str, An
         "constraints": {
             "allowed_paths": profile["context"].get("allowed_paths", []),
             "protected_paths": profile["context"].get("protected_paths", []),
+            "research_surface": profile["context"].get("research_surface", {}),
             "resource_class": profile["environment"]["resource_class"],
             "timeout_seconds": profile["environment"]["timeout_seconds"],
             "confirmation_runs": profile["evaluation"]["confirmation_runs"],

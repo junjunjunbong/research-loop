@@ -10,6 +10,15 @@ context:
     - "Primary metric reaches the target and the identical code tree is confirmed"
   allowed_paths: [config.json, src]
   protected_paths: [data, evaluation.py]
+  research_surface:           # optional descriptive abstraction; approval-bound via context
+    editable_components:
+      - name: scorer
+        interface: experiment.py:score
+        allowed_changes: [internal_logic, configuration]
+    invariants:
+      - "evaluation data and the metric parser stay unchanged"
+    forbidden_data_flows:
+      - {from: test_dataset, to: training_pipeline}
 
 environment:
   package_manager: uv
@@ -87,6 +96,8 @@ policy:
 All paths are relative and confined to the target project or experiment worktree. Commands are argv arrays executed with `shell=False`. `new-campaign --base <git-ref>` resolves the base to an immutable commit included in the approval hash. The Strategy Contract is also approval-bound and becomes immutable after the first ledger row.
 
 Supported transition triggers are `baseline_recorded`, `experiments_recorded_gte`, `promising_results_gte`, `consecutive_inconclusive_gte`, `target_reached`, and `remaining_experiments_lte`. The runner applies at most one matching rule after each recorded result, using the lowest numeric priority first. Confirmation remains a global obligation rather than a Selector.
+
+`context.research_surface` is descriptive, not executable: it tells hypothesis generation which components may change, which invariants must hold, and which data flows are forbidden. It is hashed with the rest of `context` and shown in the dry run; verification still runs only through `environment.commands` and the evaluation compatibility parsers.
 
 `policy.knowledge_access` is approval-bound like the rest of the policy: it appears in the dry run and its change invalidates approval. When it is present with a mode other than `none`, every `idea_sources` entry must match a record registered in the campaign Knowledge Pack (`pack-add`, verified by `pack-verify`); when it is absent, hash-pinned `idea_sources` are still accepted but no pack exists. `allow_network` governs agent-side retrieval only — the runner never fetches.
 

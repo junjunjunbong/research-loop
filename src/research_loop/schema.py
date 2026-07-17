@@ -223,6 +223,35 @@ def validate_profile(profile: Dict[str, Any], repo: Path) -> None:
     criteria = context.get("success_criteria", [])
     if not isinstance(criteria, list) or not all(isinstance(item, str) for item in criteria):
         raise ResearchLoopError("context.success_criteria must be a list of strings")
+    surface = context.get("research_surface")
+    if surface is not None:
+        surface = _mapping(surface, "context.research_surface")
+        components = surface.get("editable_components", [])
+        if not isinstance(components, list):
+            raise ResearchLoopError("context.research_surface.editable_components must be a list")
+        for index, item in enumerate(components):
+            field = f"context.research_surface.editable_components[{index}]"
+            component = _mapping(item, field)
+            _string(component.get("name"), f"{field}.name")
+            _string(component.get("interface"), f"{field}.interface")
+            changes = component.get("allowed_changes", [])
+            if not isinstance(changes, list) or not all(
+                isinstance(change, str) and change.strip() for change in changes
+            ):
+                raise ResearchLoopError(f"{field}.allowed_changes must be a list of non-empty strings")
+        invariants = surface.get("invariants", [])
+        if not isinstance(invariants, list) or not all(
+            isinstance(item, str) and item.strip() for item in invariants
+        ):
+            raise ResearchLoopError("context.research_surface.invariants must be a list of non-empty strings")
+        flows = surface.get("forbidden_data_flows", [])
+        if not isinstance(flows, list):
+            raise ResearchLoopError("context.research_surface.forbidden_data_flows must be a list")
+        for index, item in enumerate(flows):
+            field = f"context.research_surface.forbidden_data_flows[{index}]"
+            flow = _mapping(item, field)
+            _string(flow.get("from"), f"{field}.from")
+            _string(flow.get("to"), f"{field}.to")
 
     environment = _mapping(profile.get("environment"), "environment")
     _string(environment.get("package_manager"), "environment.package_manager")

@@ -53,7 +53,7 @@ Fix or drop an item when any answer is no:
 1. **Falsifiable** — could the prediction actually fail under the authoritative metric and noise tolerance?
 2. **One causal factor** — does `changed_factor` name exactly one thing? More than one → split it, or reclassify as a deliberate recombine.
 3. **Novel** — not a paraphrase of a pending, recorded, or previously rejected sibling (compare family, parent, operator, and statement).
-4. **Scope-valid** — the change stays inside allowed paths, away from protected paths, within the approved resource class.
+4. **Scope-valid** — the change stays inside allowed paths, away from protected paths, within the approved resource class, and respects `context.research_surface` invariants and forbidden data flows when declared.
 5. **No reward hacking** — the improvement route passes through the stated mechanism, not through evaluation inputs, parser quirks, or comparison conditions.
 6. **Grounded** — at least one recorded local experiment motivates it, and every external claim's applicability conditions hold in this repository.
 7. **Budget-aware** — estimated cost leaves room for confirmation within the remaining experiments.

@@ -9,7 +9,7 @@ from research_loop.errors import ResearchLoopError
 from research_loop.hypotheses import add_hypothesis
 from research_loop.knowledge import add_pack_record, verify_pack
 from research_loop.planning import save_plan
-from research_loop.proposals import validate_proposal
+from research_loop.proposals import proposal_context, validate_proposal
 from research_loop.schema import normalize_profile, validate_profile
 from research_loop.state import campaign_dir
 from test_proposals import candidate_spec, paper_source, write_yaml_spec
@@ -167,6 +167,46 @@ def test_sources_must_be_registered_when_pack_enabled(mock_repo: Path, tmp_path:
     assert result["counts"]["accepted"] == 1
     assert result["items"][0]["candidate"]["candidate_id"] == "use-gate"
     assert "not registered in the knowledge pack" in result["rejected"][0]["reasons"][0]
+
+
+def test_research_surface_validation_and_display(mock_repo: Path, tmp_path: Path) -> None:
+    surface = {
+        "editable_components": [
+            {"name": "scorer", "interface": "experiment.py:score", "allowed_changes": ["internal_logic"]}
+        ],
+        "invariants": ["evaluation data and the metric parser stay unchanged"],
+        "forbidden_data_flows": [{"from": "test_dataset", "to": "training_pipeline"}],
+    }
+
+    def fresh() -> dict:
+        return normalize_profile(
+            yaml.safe_load((ROOT / "examples" / "mock-profile-v2.yaml").read_text(encoding="utf-8")),
+            mock_repo,
+        )
+
+    profile = fresh()
+    profile["context"]["research_surface"] = surface
+    validate_profile(profile, mock_repo)
+    invalid_cases = (
+        ({"invariants": [""]}, "invariants"),
+        ({"editable_components": [{"name": "x"}]}, "interface"),
+        ({"forbidden_data_flows": [{"from": "a"}]}, "forbidden_data_flows"),
+    )
+    for bad_surface, message in invalid_cases:
+        invalid = fresh()
+        invalid["context"]["research_surface"] = bad_surface
+        with pytest.raises(ResearchLoopError, match=message):
+            validate_profile(invalid, mock_repo)
+
+    path = write_profile(tmp_path, selector="diagnostic", transitions=[])
+    document = yaml.safe_load(path.read_text(encoding="utf-8"))
+    document["context"]["research_surface"] = surface
+    path.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+    approve_v2(mock_repo, path)
+    plan = save_plan(mock_repo)
+    assert plan["dry_run"]["research_surface"]["invariants"] == surface["invariants"]
+    context = proposal_context(mock_repo)
+    assert context["constraints"]["research_surface"]["forbidden_data_flows"] == surface["forbidden_data_flows"]
 
 
 def test_max_sources_per_round(mock_repo: Path, tmp_path: Path) -> None:

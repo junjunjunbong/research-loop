@@ -1,6 +1,6 @@
 # Idea Supply development plan
 
-Status: PR0–PR5 done. Next: PR6 (research surface) or PR7 (agent retrieval).
+Status: PR0–PR6 done. Next: PR7 (agent retrieval).
 Baseline: commit `0d557f8`, package version 0.3.0, schema v2 campaigns. Test suite verified green at this commit (39 passed, 2026-07-17).
 Origin: three-way design review (2026-07-17) of AIDE ML / Aiden techniques against this codebase. This plan supersedes the PR numbering used in that discussion; the mapping is listed at the end.
 
@@ -108,7 +108,7 @@ Deviations from the sketch: record fields use `applicability` (string, matching 
 - Contamination guard: retrieval guidance forbids queries for benchmark answers, test-set contents, or leaderboard solutions to the exact evaluation task; optional `retrieval_cutoff` date in `knowledge_access`.
 - No runner network code: the runner only verifies what the agent stored. Availability note: headless/cron sessions may lack web tools; retrieval degrades to `local_pack` behavior.
 
-### PR6 — Research surface (independent track; any time after PR0)
+### PR6 — Research surface (independent track; any time after PR0) — DONE
 - `context.research_surface` (editable_components, invariants, forbidden_data_flows) as *descriptive* data — automatically approval-bound via `context`; shown in the dry run.
 - No executable commands here: verification runs only through existing `environment.commands` and evaluation compatibility parsers (trust-boundary rule from the review).
 
@@ -143,5 +143,5 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 - [x] PR3 — recombine refinement (`interaction_rationale` stored on recombine candidates, recombine-only validation; L4 reads it from the store and from proposals)
 - [x] PR4 — persisted `idea_sources` (`normalize_idea_source` lives in `hypotheses.py`; proposals reuse it; hypothesis-level sources join `source_set_hash` deduplicated; spec documented in `references/profile-schema.md`)
 - [x] PR5 — Knowledge Pack storage + verification (`knowledge.py`, `pack-add` / `pack-verify`, `policy.knowledge_access` validation + dry-run display, registration enforced in `proposal-validate` and `hypothesis-add`, `tests/test_knowledge.py`)
-- [ ] PR6 — research surface
+- [x] PR6 — research surface (`context.research_surface` validated, hashed via context, shown in dry run and `proposal-context` constraints)
 - [ ] PR7 — agent-side paper/PR retrieval
