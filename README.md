@@ -89,12 +89,12 @@ then install the plugin from that marketplace:
 
 ```bash
 codex plugin marketplace add junjunjunbong/research-loop \
-  --ref 210696d0bcc0f4a432c55ae51b553a0682dd7549
+  --ref v0.2.0
 codex plugin add research-loop@research-loop
 ```
 
-That SHA is the immutable 0.2.0 source. Future releases should replace it with
-their own immutable tag or full commit SHA.
+`v0.2.0` is the immutable 0.2.0 release source. Future releases should use
+their own immutable release tag or full commit SHA.
 
 Do not register a mutable development checkout as the live marketplace source.
 Codex installs a cached copy, but refreshing a local marketplace that follows a
