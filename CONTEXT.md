@@ -47,3 +47,27 @@ _Avoid_: Trial, arbitrary code change
 **Research Ledger**:
 The append-only record that connects every attempted Experiment to its branch, command, artifacts, metric, and decision.
 _Avoid_: Log file, notes
+
+**Proposal**:
+An agent-authored, runner-validated portfolio of hypothesis and candidate items that changes no state until its accepted items are registered.
+_Avoid_: Plan, batch of guesses
+
+**Portfolio Lint**:
+Deterministic, Selector-aware coverage warnings over pending and proposed candidates; advisory, never authorizing.
+_Avoid_: Critic, gate
+
+**Idea Source**:
+A hash-pinned reference to external material that explains where an idea came from; never a substitute for recorded local origin evidence.
+_Avoid_: Citation, imported solution
+
+**Knowledge Pack**:
+The content-addressed, locally verified set of normalized claim records offered as optional hypothesis-generation input, filled by the user or by approved Agent Retrieval.
+_Avoid_: Cache, scraped corpus
+
+**Agent Retrieval**:
+The approved, agent-side search-and-normalize workflow that fills a Knowledge Pack from external papers, pull requests, and issues; the runner never fetches.
+_Avoid_: Runner network access, web crawling
+
+**Research Surface**:
+The approved description of which components may change, the invariants that must hold, and the data flows that are forbidden.
+_Avoid_: Allowed paths, executable checks
