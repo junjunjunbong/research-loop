@@ -139,7 +139,7 @@ Discussion PR0 → PR0 here. Discussion PR1 (proposal schema + validator) → PR
 5. Do not fold multiple PRs into one commit; the sequence is the audit trail.
 
 - [x] PR0 — ADR + threat model (commit `8fb4184`)
-- [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; README install pin stays at `v0.3.0` until a `v0.4.0` release tag exists)
+- [x] PR1 — stateless proposal contract (`proposals.py`, `proposal-validate` / `portfolio-lint` / `proposal-context`, `tests/test_proposals.py`, version 0.4.0 + dist; released as `v0.4.0` on 2026-07-17)
 - [x] PR2 — skill-side generation + critic (`references/proposal-guide.md`; SKILL.md + workflow.md wired to the proposal pipeline)
 - [x] PR3 — recombine refinement (`interaction_rationale` stored on recombine candidates, recombine-only validation; L4 reads it from the store and from proposals)
 - [x] PR4 — persisted `idea_sources` (`normalize_idea_source` lives in `hypotheses.py`; proposals reuse it; hypothesis-level sources join `source_set_hash` deduplicated; spec documented in `references/profile-schema.md`)

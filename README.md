@@ -94,11 +94,11 @@ then install the plugin from that marketplace:
 
 ```bash
 codex plugin marketplace add junjunjunbong/research-loop \
-  --ref v0.3.0
+  --ref v0.4.0
 codex plugin add research-loop@research-loop
 ```
 
-`v0.3.0` is the immutable 0.3.0 release source. Future releases should use
+`v0.4.0` is the immutable 0.4.0 release source. Future releases should use
 their own immutable release tag or full commit SHA.
 
 Do not register a mutable development checkout as the live marketplace source.
