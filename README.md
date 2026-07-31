@@ -94,11 +94,11 @@ then install the plugin from that marketplace:
 
 ```bash
 codex plugin marketplace add junjunjunbong/research-loop \
-  --ref v0.4.0
+  --ref v0.4.1
 codex plugin add research-loop@research-loop
 ```
 
-`v0.4.0` is the immutable 0.4.0 release source. Future releases should use
+`v0.4.1` is the immutable 0.4.1 release source. Future releases should use
 their own immutable release tag or full commit SHA.
 
 Do not register a mutable development checkout as the live marketplace source.
@@ -144,10 +144,10 @@ The Claude Code skill is exposed as:
 
 ### 2. Start from Codex or Claude Code
 
-Open an existing Git research project and ask either client for a bounded research campaign. In Claude Code, invoke `/research-loop:research-loop`; in Codex, request the workflow directly. For example:
+Open an existing Git research project and explicitly invoke the skill. It is intentionally excluded from automatic model invocation so ordinary research, coding, and experimentation requests do not activate it. Use `$research-loop:research-loop` in Codex or `/research-loop:research-loop` in Claude Code. For example:
 
 ```text
-Set up and run a bounded autonomous research campaign for this repository.
+$research-loop:research-loop Set up and run a bounded autonomous research campaign for this repository.
 Goal: improve retrieval recall@10 without changing the dataset or evaluator.
 Allow at most 5 experiments and 2 hours of local CPU time.
 ```

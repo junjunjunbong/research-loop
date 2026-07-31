@@ -24,7 +24,7 @@ def test_plugin_manifests_and_marketplace() -> None:
 
     assert codex_manifest["name"] == claude_manifest["name"] == "research-loop"
     assert codex_manifest["version"] == claude_manifest["version"]
-    assert codex_manifest["version"] == "0.4.0"
+    assert codex_manifest["version"] == "0.4.1"
     assert codex_manifest["description"] == claude_manifest["description"]
     assert codex_manifest["skills"] == "./skills/"
 
@@ -74,6 +74,17 @@ def test_skill_frontmatter() -> None:
         metadata = yaml.safe_load(frontmatter)
         assert isinstance(metadata.get("name"), str)
         assert isinstance(metadata.get("description"), str)
+
+
+def test_research_loop_requires_explicit_invocation() -> None:
+    skill = ROOT / "skills" / "research-loop" / "SKILL.md"
+    _, frontmatter, body = skill.read_text(encoding="utf-8").split("---", 2)
+    metadata = yaml.safe_load(frontmatter)
+
+    assert "disable-model-invocation" not in metadata
+    assert "only when the user explicitly names" in metadata["description"]
+    assert "Do not trigger from a task's similarity" in metadata["description"]
+    assert "explicitly names" in body
 
 
 def test_skill_relative_references_exist() -> None:

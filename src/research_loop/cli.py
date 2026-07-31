@@ -36,7 +36,7 @@ def _repo_parser(subparsers: argparse._SubParsersAction, name: str, help_text: s
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="research-loop")
-    parser.add_argument("--version", action="version", version="research-loop 0.4.0")
+    parser.add_argument("--version", action="version", version="research-loop 0.4.1")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     _repo_parser(subparsers, "inspect", "Inspect project evidence without changing it")

@@ -1,10 +1,14 @@
 ---
 name: research-loop
 license: Apache-2.0
-description: "Bootstrap and run a bounded autonomous research campaign in an existing Git project. Use when a user wants the agent to inspect a research codebase, compile a goal into project-specific execution and evaluation contracts, establish a baseline, and iteratively test hypotheses. Do NOT use for ordinary bug fixes, code review, one-off commands, or when the user has not asked for autonomous experimentation."
+description: "Run a bounded autonomous research campaign in an existing Git project. Use only when the user explicitly names or invokes the research-loop skill. Do not trigger from a task's similarity to research, experimentation, optimization, or autonomous iteration."
 ---
 
 # Research Loop
+
+## Invocation Gate
+
+Proceed only when the user explicitly names the `research-loop` skill or invokes its client command. A research repository, an experimentation request, or a task that otherwise matches this description is not sufficient authorization to activate the skill automatically. If the skill was selected without an explicit user invocation, stop using it and handle the request normally.
 
 Turn the user's Research Goal and the current Git project into an approved, auditable local experiment campaign.
 
